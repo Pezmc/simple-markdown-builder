@@ -3,7 +3,7 @@ import path from 'node:path'
 import type { RenderPlan, iAlternateLink } from './config.js'
 import { isBooleanEnabled } from './frontmatter.js'
 import { stripHtmlExtension } from './utils.js'
-import { toAbsoluteUrl, cleanUrl } from './template.js'
+import { toAbsoluteUrl } from './template.js'
 
 export function groupByTranslation(plans: RenderPlan[]): Map<string, RenderPlan[]> {
   return plans.reduce((map, plan) => {

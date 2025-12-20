@@ -18,8 +18,8 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
 
   const contentDir = path.resolve(config.contentDir ?? 'content')
   const outputDir = path.resolve(config.outputDir ?? 'docs')
-  const defaultLang = config.translations?.defaultLang ?? 'en'
-  const supportedLangs = config.translations?.supportedLangs ?? [defaultLang]
+  const defaultLang = config.translations !== false ? (config.translations?.defaultLang ?? 'en') : 'en'
+  const supportedLangs = config.translations !== false ? (config.translations?.supportedLangs ?? [defaultLang]) : [defaultLang]
 
   // Ensure translations if enabled
   if (config.translations !== false) {
@@ -57,7 +57,6 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
         config.homepageTemplatePath,
         alternates,
         canonicalRelative,
-        supportedLangs,
       )
       await writeFile(plan.outputPath, rendered)
       console.log(`Generated ${path.relative(process.cwd(), plan.outputPath)}`)
@@ -65,7 +64,6 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
   )
 
   // Generate sitemap
-  const groups = groupByTranslation(plans)
   await writeSitemap(plans, outputDir, config.baseUrl, defaultLang, groups)
 
   // Check links unless skipped

@@ -1,14 +1,14 @@
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { GlossaryEntries, Translator } from 'deepl-node'
-import type { TargetLanguageCode } from 'deepl-node'
+import type { TargetLanguageCode, SourceLanguageCode } from 'deepl-node'
 import type {
   BuilderConfig,
   FrontMatter,
   TranslatePlan,
   TranslationConfig,
 } from './config.js'
-import { extractFrontMatter, sanitizeSlug, isBooleanEnabled } from './frontmatter.js'
+import { extractFrontMatter, sanitizeSlug, isBooleanEnabled as isTranslateEnabled } from './frontmatter.js'
 import { collectMarkdownFiles } from './utils.js'
 
 let translatorInstance: Translator | null | undefined
@@ -343,7 +343,7 @@ async function getCustomGlossaryId(
     const glossaryEntries = new GlossaryEntries(entries)
     const glossary = await translator.createGlossary(
       glossaryName,
-      defaultLang,
+      defaultLang as SourceLanguageCode,
       targetLang,
       glossaryEntries,
     )
@@ -362,9 +362,11 @@ async function getTranslator(
   if (translatorInstance !== undefined) {
     return translatorInstance
   }
-  translatorInstance = translationConfig.apiKey
-    ? new Translator(translationConfig.apiKey)
-    : null
+  if (!translationConfig.apiKey) {
+    translatorInstance = null
+    return null
+  }
+  translatorInstance = new Translator(translationConfig.apiKey)
   return translatorInstance
 }
 

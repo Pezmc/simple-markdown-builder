@@ -70,7 +70,6 @@ export async function renderTemplate(
   homepageTemplatePath?: string,
   alternates?: iAlternateLink[],
   canonicalRelative?: string,
-  supportedLangs?: readonly string[],
 ): Promise<string> {
   const defaultLang = 'en'
   const template = isHomepage && homepageTemplatePath
@@ -101,7 +100,7 @@ export async function renderTemplate(
     : ''
 
   const languageSwitcher = alternates
-    ? renderLanguageSwitcher(meta.lang ?? defaultLang, alternates, baseUrl)
+    ? renderLanguageSwitcher(meta.lang ?? defaultLang, alternates)
     : ''
 
   return template
@@ -134,7 +133,6 @@ function stripHtmlExtension(url: string): string {
 function renderLanguageSwitcher(
   currentLang: string,
   alternates: iAlternateLink[],
-  baseUrl: string,
 ): string {
   const available = alternates.filter((alt) => alt.lang !== 'x-default')
   if (available.length <= 1) {
