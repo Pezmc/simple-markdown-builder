@@ -29,3 +29,11 @@ test('createMarkdownRenderer - linkify', () => {
   expect(result).toContain('href="https://example.com"')
 })
 
+test('createMarkdownRenderer - trims leading/trailing hyphens from anchor IDs', () => {
+  const md = createMarkdownRenderer()
+  const result = md.render('## 🎪 What\'s happening at RopeLabs')
+  // Should not have leading hyphen in ID
+  expect(result).toContain('id="whats-happening-at-ropelabs"')
+  expect(result).not.toContain('id="-whats-happening-at-ropelabs"')
+})
+
