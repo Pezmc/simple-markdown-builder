@@ -3,7 +3,7 @@ import path from 'node:path'
 import type { MissingLink } from './config.js'
 import { collectHtmlFiles } from './utils.js'
 
-const SKIP_PREFIXES = ['#', 'mailto:', 'tel:', 'javascript:', 'data:']
+const SKIP_PREFIXES = ['mailto:', 'tel:', 'javascript:', 'data:']
 const SKIP_SCHEMES = ['http://', 'https://']
 
 function isSkippableHref(href: string): boolean {
@@ -12,6 +12,26 @@ function isSkippableHref(href: string): boolean {
     SKIP_PREFIXES.some((prefix) => href.startsWith(prefix)) ||
     SKIP_SCHEMES.some((scheme) => href.startsWith(scheme))
   )
+}
+
+function extractAnchor(href: string): string | null {
+  const hashIndex = href.indexOf('#')
+  if (hashIndex === -1) {
+    return null
+  }
+  return href.slice(hashIndex + 1) || null
+}
+
+function extractIdsFromHtml(html: string): Set<string> {
+  const ids = new Set<string>()
+  // Match id="..." or id='...'
+  const idMatches = html.matchAll(/id=["']([^"']+)["']/gi)
+  for (const match of idMatches) {
+    if (match[1]) {
+      ids.add(match[1])
+    }
+  }
+  return ids
 }
 
 function resolveInternalPath(href: string, fromFile: string, outputDir: string): string {
@@ -47,10 +67,26 @@ export async function checkLinks(outputDir: string): Promise<void> {
   for (const file of htmlFiles) {
     const content = await readFile(file, 'utf-8')
     const hrefs = extractHrefs(content)
+    const fileIds = extractIdsFromHtml(content)
+
     for (const href of hrefs) {
       if (isSkippableHref(href)) {
         continue
       }
+
+      // Check same-page anchor links (just #anchor)
+      if (href.startsWith('#')) {
+        const anchor = href.slice(1)
+        if (anchor && !fileIds.has(anchor)) {
+          missing.push({
+            fromFile: file,
+            href,
+            resolvedPath: `${file}#${anchor}`,
+          })
+        }
+        continue
+      }
+
       const resolvedPath = resolveInternalPath(href, file, outputDir)
 
       const normalizedResolved = path.normalize(resolvedPath)
@@ -61,6 +97,7 @@ export async function checkLinks(outputDir: string): Promise<void> {
       ]
 
       let found = false
+      let targetFile: string | null = null
       for (const variation of pathVariations) {
         try {
           const normalizedVariation = path.normalize(variation)
@@ -69,6 +106,7 @@ export async function checkLinks(outputDir: string): Promise<void> {
             ? path.join(normalizedVariation, 'index.html')
             : normalizedVariation
           await stat(checkPath)
+          targetFile = checkPath
           found = true
           break
         } catch {
@@ -82,6 +120,25 @@ export async function checkLinks(outputDir: string): Promise<void> {
           href,
           resolvedPath,
         })
+        continue
+      }
+
+      // Check anchor link if present
+      const anchor = extractAnchor(href)
+      if (anchor && targetFile) {
+        try {
+          const targetContent = await readFile(targetFile, 'utf-8')
+          const ids = extractIdsFromHtml(targetContent)
+          if (!ids.has(anchor)) {
+            missing.push({
+              fromFile: file,
+              href,
+              resolvedPath: `${targetFile}#${anchor}`,
+            })
+          }
+        } catch {
+          // If we can't read the file, it's already reported as missing above
+        }
       }
     }
   }
