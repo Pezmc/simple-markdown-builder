@@ -1,6 +1,6 @@
 {
   "name": "simple-markdown-builder",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "A simple markdown-to-HTML site builder with optional translations",
   "type": "module",
   "main": "./dist/index.js",
