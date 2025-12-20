@@ -1,5 +1,5 @@
 import type { TargetLanguageCode } from 'deepl-node'
-import type MarkdownIt from 'markdown-it'
+import type { Options as MarkdownItOptions } from 'markdown-it'
 
 export interface FrontMatter {
   readonly title?: string
@@ -81,7 +81,7 @@ export interface BuilderConfig {
   readonly defaultMeta: Omit<PageMeta, 'slug' | 'output' | 'lang' | 'translationOf' | 'translate' | 'noindex' | 'ogImage'>
   readonly templatePath: string
   readonly homepageTemplatePath?: string
-  readonly markdownOptions?: MarkdownIt.Options
+  readonly markdownOptions?: MarkdownItOptions
   readonly translations?: false | TranslationConfig
   readonly utmParams?: UtmParams
   readonly skipLinkCheck?: boolean
