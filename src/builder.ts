@@ -57,6 +57,7 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
         config.homepageTemplatePath,
         alternates,
         canonicalRelative,
+        supportedLangs,
       )
       await writeFile(plan.outputPath, rendered)
       console.log(`Generated ${path.relative(process.cwd(), plan.outputPath)}`)

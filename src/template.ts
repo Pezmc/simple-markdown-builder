@@ -70,7 +70,9 @@ export async function renderTemplate(
   homepageTemplatePath?: string,
   alternates?: iAlternateLink[],
   canonicalRelative?: string,
+  supportedLangs?: readonly string[],
 ): Promise<string> {
+  const defaultLang = 'en'
   const template = isHomepage && homepageTemplatePath
     ? await loadHomepageTemplate(homepageTemplatePath, templatePath)
     : await loadTemplate(templatePath)
@@ -98,6 +100,10 @@ export async function renderTemplate(
     ? '    <meta name="robots" content="noindex, nofollow" />'
     : ''
 
+  const languageSwitcher = alternates
+    ? renderLanguageSwitcher(meta.lang ?? defaultLang, alternates, baseUrl)
+    : ''
+
   return template
     .replace(/\{\{TITLE\}\}/g, escapeHtml(meta.title))
     .replace(/\{\{DESCRIPTION\}\}/g, escapeHtml(meta.description))
@@ -111,10 +117,42 @@ export async function renderTemplate(
     .replace(/\{\{TWITTER_IMAGE\}\}/g, ogImage)
     .replace(/\{\{HREFLANG_LINKS\}\}/g, hreflangLinks)
     .replace(/\{\{NOINDEX\}\}/g, noindexTag)
+    .replace(/\{\{LANGUAGE_SWITCHER\}\}/g, languageSwitcher)
+    .replace(/\{\{LANG\}\}/g, meta.lang ?? defaultLang)
+    .replace(/\{\{BACK_LINK_HREF\}\}/g, escapeHtml(meta.backLinkHref))
+    .replace(/\{\{BACK_LINK_LABEL\}\}/g, escapeHtml(meta.backLinkLabel))
+    .replace(/\{\{SIDEBAR_TITLE\}\}/g, escapeHtml(meta.sidebarTitle))
+    .replace(/\{\{SIDEBAR_SUMMARY\}\}/g, escapeHtml(meta.sidebarSummary))
+    .replace(/\{\{YEAR\}\}/g, new Date().getFullYear().toString())
     .replace(/\{\{BODY\}\}/g, body)
 }
 
 function stripHtmlExtension(url: string): string {
   return url.replace(/\.html?$/i, '')
+}
+
+function renderLanguageSwitcher(
+  currentLang: string,
+  alternates: iAlternateLink[],
+  baseUrl: string,
+): string {
+  const available = alternates.filter((alt) => alt.lang !== 'x-default')
+  if (available.length <= 1) {
+    return ''
+  }
+
+  const pills = available
+    .map((alt) => {
+      const isActive = alt.lang === currentLang
+      const label = alt.lang.toUpperCase()
+      const href = new URL(alt.href).pathname
+      if (isActive) {
+        return `<span class="inline-flex items-center rounded-full bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">${label}</span>`
+      }
+      return `<a href="${href}" class="inline-flex items-center rounded-full border border-brand/30 px-3 py-1 text-xs font-semibold text-brand hover:bg-brand/10">${label}</a>`
+    })
+    .join('<span class="text-slate-400">·</span>')
+
+  return `<div class="mb-6 flex flex-wrap items-center gap-2" aria-label="Language selector">${pills}</div>`
 }
 

@@ -16,6 +16,13 @@ export async function startDevServer(
   const outputDir = path.resolve(options.outputDir ?? config.outputDir ?? 'docs')
   const port = options.port ?? Number(process.env.PORT ?? 4173)
 
+  // Ensure translations if enabled and refresh requested
+  if (config.translations !== false && options.refreshTranslations) {
+    const { ensureTranslations } = await import('./translations.js')
+    const contentDir = path.resolve(config.contentDir ?? 'content')
+    await ensureTranslations(config, contentDir, true)
+  }
+
   // Initial build
   await build(config)
 
