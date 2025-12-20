@@ -9,6 +9,9 @@ import { extractFrontMatter, sanitizeLang, sanitizeSlug } from './frontmatter.js
 import { createMarkdownRenderer } from './markdown.js'
 import { renderTemplate, clearTemplateCache } from './template.js'
 import { appendUtmParams, obfuscateMailtoLinks, collectMarkdownFiles } from './utils.js'
+import { ensureTranslations } from './translations.js'
+import { writeSitemap, groupByTranslation } from './sitemap.js'
+import { checkLinks } from './link-checker.js'
 
 export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
   clearTemplateCache()
@@ -18,11 +21,16 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
   const defaultLang = config.translations?.defaultLang ?? 'en'
   const supportedLangs = config.translations?.supportedLangs ?? [defaultLang]
 
+  // Ensure translations if enabled
+  if (config.translations !== false) {
+    await ensureTranslations(config, contentDir, false)
+  }
+
   const markdownFiles = await collectMarkdownFiles(contentDir)
 
   if (markdownFiles.length === 0) {
     console.warn('No markdown files found in content/.')
-    return
+    return []
   }
 
   const md = createMarkdownRenderer(config.markdownOptions)
@@ -48,6 +56,15 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
       console.log(`Generated ${path.relative(process.cwd(), plan.outputPath)}`)
     }),
   )
+
+  // Generate sitemap
+  const groups = groupByTranslation(plans)
+  await writeSitemap(plans, outputDir, config.baseUrl, defaultLang, groups)
+
+  // Check links unless skipped
+  if (!config.skipLinkCheck) {
+    await checkLinks(outputDir)
+  }
 
   return plans
 }
