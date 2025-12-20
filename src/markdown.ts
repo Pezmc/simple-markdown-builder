@@ -1,6 +1,7 @@
 import MarkdownIt from 'markdown-it'
 import type { Options as MarkdownItOptions } from 'markdown-it'
 import markdownItAnchor from 'markdown-it-anchor'
+import { slugifyAnchor } from './utils.js'
 
 export function createMarkdownRenderer(options?: MarkdownItOptions): MarkdownIt {
   const defaultOptions: MarkdownItOptions = {
@@ -17,14 +18,7 @@ export function createMarkdownRenderer(options?: MarkdownItOptions): MarkdownIt 
   md.use(markdownItAnchor, {
     level: [1, 2, 3],
     permalink: false,
-    slugify: (s: string) => {
-      return s
-        .toLowerCase()
-        .trim()
-        .replace(/[^\w\s-]/g, '')
-        .replace(/[\s_-]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-    },
+    slugify: slugifyAnchor,
   })
 
   return md

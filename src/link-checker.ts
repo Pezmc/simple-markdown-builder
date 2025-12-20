@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import type { MissingLink } from './config.js'
-import { collectHtmlFiles } from './utils.js'
+import { collectHtmlFiles, slugifyAnchor } from './utils.js'
 
 const SKIP_PREFIXES = ['mailto:', 'tel:', 'javascript:', 'data:']
 const SKIP_SCHEMES = ['http://', 'https://']
@@ -77,12 +77,16 @@ export async function checkLinks(outputDir: string): Promise<void> {
       // Check same-page anchor links (just #anchor)
       if (href.startsWith('#')) {
         const anchor = href.slice(1)
-        if (anchor && !fileIds.has(anchor)) {
-          missing.push({
-            fromFile: file,
-            href,
-            resolvedPath: `${file}#${anchor}`,
-          })
+        if (anchor) {
+          // IDs are always normalized by slugifyAnchor, so normalize the anchor from href
+          const normalizedAnchor = slugifyAnchor(anchor)
+          if (!fileIds.has(normalizedAnchor)) {
+            missing.push({
+              fromFile: file,
+              href,
+              resolvedPath: `${file}#${anchor}`,
+            })
+          }
         }
         continue
       }
@@ -129,7 +133,9 @@ export async function checkLinks(outputDir: string): Promise<void> {
         try {
           const targetContent = await readFile(targetFile, 'utf-8')
           const ids = extractIdsFromHtml(targetContent)
-          if (!ids.has(anchor)) {
+          // IDs are always normalized by slugifyAnchor, so normalize the anchor from href
+          const normalizedAnchor = slugifyAnchor(anchor)
+          if (!ids.has(normalizedAnchor)) {
             missing.push({
               fromFile: file,
               href,

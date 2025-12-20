@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { PageMeta, iAlternateLink } from './config.js'
-import { normalizeIndexUrl } from './utils.js'
+import { normalizeIndexUrl, stripHtmlExtension } from './utils.js'
 
 let templateCache: Map<string, string> = new Map()
 let homepageTemplateCache: Map<string, string> = new Map()
@@ -125,10 +125,6 @@ export async function renderTemplate(
     .replace(/\{\{SIDEBAR_SUMMARY\}\}/g, escapeHtml(meta.sidebarSummary))
     .replace(/\{\{YEAR\}\}/g, new Date().getFullYear().toString())
     .replace(/\{\{BODY\}\}/g, body)
-}
-
-function stripHtmlExtension(url: string): string {
-  return url.replace(/\.html?$/i, '')
 }
 
 function renderLanguageSwitcher(
