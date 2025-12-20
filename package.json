@@ -1,6 +1,6 @@
 {
   "name": "simple-markdown-builder",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A simple markdown-to-HTML site builder with optional translations",
   "type": "module",
   "main": "./dist/index.js",
@@ -15,7 +15,10 @@
     "build": "bun build ./src/index.ts --outdir ./dist --target node --format esm && tsc --emitDeclarationOnly --outDir dist",
     "dev": "bun run build --watch",
     "test": "bun test",
-    "prepublishOnly": "bun run build"
+    "prepublishOnly": "bun run build",
+    "release:patch": "npm version patch -m \":bookmark: %s\" && git push --follow-tags && bun publish",
+    "release:minor": "npm version minor -m \":bookmark: %s\" && git push --follow-tags && bun publish",
+    "release:major": "npm version major -m \":bookmark: %s\" && git push --follow-tags && bun publish"
   },
   "keywords": [
     "markdown",
