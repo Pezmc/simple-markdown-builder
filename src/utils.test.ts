@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test'
-import { serializeUtmParams, appendUtmParams } from './utils.js'
+import { serializeUtmParams, appendUtmParams, normalizeIndexUrl } from './utils.js'
 
 test('serializeUtmParams', () => {
   const params = {
@@ -37,5 +37,15 @@ test('appendUtmParams - no utm params', () => {
   const html = '<a href="https://example.com">Link</a>'
   const result = appendUtmParams(html, undefined, 'https://mysite.com')
   expect(result).toBe(html)
+})
+
+test('normalizeIndexUrl - removes /index suffix', () => {
+  expect(normalizeIndexUrl('index')).toBe('')
+  expect(normalizeIndexUrl('/index')).toBe('')
+  expect(normalizeIndexUrl('path/index')).toBe('path')
+  expect(normalizeIndexUrl('/path/index')).toBe('/path')
+  expect(normalizeIndexUrl('other')).toBe('other')
+  expect(normalizeIndexUrl('/other')).toBe('/other')
+  expect(normalizeIndexUrl('')).toBe('')
 })
 

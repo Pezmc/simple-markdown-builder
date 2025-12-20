@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { PageMeta, iAlternateLink } from './config.js'
+import { normalizeIndexUrl } from './utils.js'
 
 let templateCache: Map<string, string> = new Map()
 let homepageTemplateCache: Map<string, string> = new Map()
@@ -78,7 +79,7 @@ export async function renderTemplate(
 
   const outputPath = meta.output ?? 'index.html'
   const canonicalUrl = canonicalRelative
-    ? toAbsoluteUrl(stripHtmlExtension(canonicalRelative), baseUrl)
+    ? toAbsoluteUrl(normalizeIndexUrl(stripHtmlExtension(canonicalRelative)), baseUrl)
     : cleanUrl(outputPath, baseUrl)
   const pageUrl = cleanUrl(outputPath, baseUrl)
   const ogImage = meta.ogImage

@@ -107,3 +107,9 @@ export function stripHtmlExtension(url: string): string {
   return url.replace(/\.html?$/i, '')
 }
 
+export function normalizeIndexUrl(path: string): string {
+  // Normalize paths ending with /index or just index to empty string (base URL)
+  const normalized = path.replace(/\/index$/, '').replace(/^index$/, '')
+  return normalized
+}
+

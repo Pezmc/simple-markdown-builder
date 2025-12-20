@@ -2,7 +2,7 @@ import { writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { RenderPlan, iAlternateLink } from './config.js'
 import { isBooleanEnabled } from './frontmatter.js'
-import { stripHtmlExtension } from './utils.js'
+import { stripHtmlExtension, normalizeIndexUrl } from './utils.js'
 import { toAbsoluteUrl } from './template.js'
 
 export function groupByTranslation(plans: RenderPlan[]): Map<string, RenderPlan[]> {
@@ -34,15 +34,18 @@ export function buildAlternateLinks(
 ): iAlternateLink[] {
   const groupKey = plan.meta.translationOf ?? plan.meta.slug ?? 'page'
   const group = groups.get(groupKey) ?? [plan]
-  const links = group.map((entry) => ({
-    lang: entry.meta.lang ?? defaultLang,
-    href: toAbsoluteUrl(stripHtmlExtension(entry.relativeOutput), baseUrl),
-  }))
+  const links = group.map((entry) => {
+    const normalizedPath = normalizeIndexUrl(stripHtmlExtension(entry.relativeOutput))
+    return {
+      lang: entry.meta.lang ?? defaultLang,
+      href: toAbsoluteUrl(normalizedPath, baseUrl),
+    }
+  })
 
-  const xDefaultHref = toAbsoluteUrl(
+  const canonicalRelative = normalizeIndexUrl(
     stripHtmlExtension(resolveCanonicalRelative(plan, groups)),
-    baseUrl,
   )
+  const xDefaultHref = toAbsoluteUrl(canonicalRelative, baseUrl)
   return [...sortAlternates(links, defaultLang), { lang: 'x-default', href: xDefaultHref }]
 }
 
@@ -93,7 +96,7 @@ export async function writeSitemap(
             )
             .join('\n')
         : ''
-      const normalizedLoc = stripHtmlExtension(plan.relativeOutput)
+      const normalizedLoc = normalizeIndexUrl(stripHtmlExtension(plan.relativeOutput))
       const loc = toAbsoluteUrl(normalizedLoc, baseUrl)
       return [
         '  <url>',
