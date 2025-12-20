@@ -67,7 +67,7 @@ export interface UtmParams {
 }
 
 export interface TranslationConfig {
-  readonly apiKey: string
+  readonly apiKey?: string
   readonly targetLanguages: readonly TargetLanguageCode[]
   readonly customGlossary?: Readonly<Partial<Record<TargetLanguageCode, Record<string, string>>>>
   readonly defaultLang?: string
