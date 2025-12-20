@@ -1,0 +1,44 @@
+{
+  "name": "simple-markdown-builder",
+  "version": "0.1.0",
+  "description": "A simple markdown-to-HTML site builder with optional translations",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "bun build ./src/index.ts --outdir ./dist --target node --format esm",
+    "dev": "bun run build --watch",
+    "prepublishOnly": "bun run build"
+  },
+  "keywords": [
+    "markdown",
+    "static-site",
+    "html",
+    "builder"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "chokidar": "^4.0.3",
+    "deepl-node": "^1.15.0",
+    "markdown-it": "^14.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "bun-types": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
+}
+
