@@ -28,7 +28,8 @@ function extractIdsFromHtml(html: string): Set<string> {
   const idMatches = html.matchAll(/id=["']([^"']+)["']/gi)
   for (const match of idMatches) {
     if (match[1]) {
-      ids.add(match[1])
+      // Normalize IDs to match how anchors are normalized when checking
+      ids.add(slugifyAnchor(match[1]))
     }
   }
   return ids
@@ -56,7 +57,8 @@ function extractHrefs(html: string): string[] {
 }
 
 export async function checkLinks(outputDir: string): Promise<void> {
-  const htmlFiles = await collectHtmlFiles(outputDir)
+  const resolvedOutputDir = path.resolve(outputDir)
+  const htmlFiles = await collectHtmlFiles(resolvedOutputDir)
   if (htmlFiles.length === 0) {
     console.warn('No generated HTML files found. Skipping link check.')
     return
@@ -91,7 +93,7 @@ export async function checkLinks(outputDir: string): Promise<void> {
         continue
       }
 
-      const resolvedPath = resolveInternalPath(href, file, outputDir)
+      const resolvedPath = resolveInternalPath(href, file, resolvedOutputDir)
 
       const normalizedResolved = path.normalize(resolvedPath)
       const pathVariations = [
