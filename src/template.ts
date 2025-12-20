@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
-import type { PageMeta } from './config.js'
+import type { PageMeta, iAlternateLink } from './config.js'
 
 let templateCache: Map<string, string> = new Map()
 let homepageTemplateCache: Map<string, string> = new Map()
@@ -68,17 +68,35 @@ export async function renderTemplate(
   baseUrl: string,
   isHomepage: boolean = false,
   homepageTemplatePath?: string,
+  alternates?: iAlternateLink[],
+  canonicalRelative?: string,
 ): Promise<string> {
   const template = isHomepage && homepageTemplatePath
     ? await loadHomepageTemplate(homepageTemplatePath, templatePath)
     : await loadTemplate(templatePath)
 
   const outputPath = meta.output ?? 'index.html'
+  const canonicalUrl = canonicalRelative
+    ? toAbsoluteUrl(stripHtmlExtension(canonicalRelative), baseUrl)
+    : cleanUrl(outputPath, baseUrl)
   const pageUrl = cleanUrl(outputPath, baseUrl)
-  const canonicalUrl = pageUrl
   const ogImage = meta.ogImage
     ? toAbsoluteUrl(meta.ogImage, baseUrl)
     : toAbsoluteUrl('img/default-og.png', baseUrl)
+
+  const hreflangLinks = alternates
+    ? alternates
+        .filter((alt) => alt.lang !== 'x-default')
+        .map(
+          (alt) =>
+            `    <link rel="alternate" href="${alt.href}" hreflang="${alt.lang}" />`,
+        )
+        .join('\n')
+    : ''
+
+  const noindexTag = meta.noindex
+    ? '    <meta name="robots" content="noindex, nofollow" />'
+    : ''
 
   return template
     .replace(/\{\{TITLE\}\}/g, escapeHtml(meta.title))
@@ -91,6 +109,12 @@ export async function renderTemplate(
     .replace(/\{\{TWITTER_TITLE\}\}/g, escapeHtml(meta.title))
     .replace(/\{\{TWITTER_DESCRIPTION\}\}/g, escapeHtml(meta.description))
     .replace(/\{\{TWITTER_IMAGE\}\}/g, ogImage)
+    .replace(/\{\{HREFLANG_LINKS\}\}/g, hreflangLinks)
+    .replace(/\{\{NOINDEX\}\}/g, noindexTag)
     .replace(/\{\{BODY\}\}/g, body)
+}
+
+function stripHtmlExtension(url: string): string {
+  return url.replace(/\.html?$/i, '')
 }
 

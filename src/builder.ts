@@ -10,7 +10,7 @@ import { createMarkdownRenderer } from './markdown.js'
 import { renderTemplate, clearTemplateCache } from './template.js'
 import { appendUtmParams, obfuscateMailtoLinks, collectMarkdownFiles } from './utils.js'
 import { ensureTranslations } from './translations.js'
-import { writeSitemap, groupByTranslation } from './sitemap.js'
+import { writeSitemap, groupByTranslation, buildAlternateLinks, resolveCanonicalRelative } from './sitemap.js'
 import { checkLinks } from './link-checker.js'
 
 export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
@@ -40,10 +40,14 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
     ),
   )
 
+  const groups = groupByTranslation(plans)
+
   await Promise.all(
     plans.map(async (plan) => {
       await mkdir(path.dirname(plan.outputPath), { recursive: true })
       const isHomepage = plan.meta.output === 'index.html'
+      const alternates = buildAlternateLinks(plan, groups, config.baseUrl, defaultLang)
+      const canonicalRelative = resolveCanonicalRelative(plan, groups)
       const rendered = await renderTemplate(
         plan.html,
         plan.meta,
@@ -51,6 +55,8 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
         config.baseUrl,
         isHomepage,
         config.homepageTemplatePath,
+        alternates,
+        canonicalRelative,
       )
       await writeFile(plan.outputPath, rendered)
       console.log(`Generated ${path.relative(process.cwd(), plan.outputPath)}`)

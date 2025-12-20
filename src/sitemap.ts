@@ -15,6 +15,17 @@ export function groupByTranslation(plans: RenderPlan[]): Map<string, RenderPlan[
   }, new Map<string, RenderPlan[]>())
 }
 
+export function resolveCanonicalRelative(
+  plan: RenderPlan,
+  groups: Map<string, RenderPlan[]>,
+): string {
+  const groupKey = plan.meta.translationOf ?? plan.meta.slug ?? 'page'
+  const group = groups.get(groupKey) ?? [plan]
+  const defaultLang = plan.meta.lang ?? 'en'
+  const english = group.find((entry) => entry.meta.lang === defaultLang)
+  return english?.relativeOutput ?? plan.relativeOutput
+}
+
 export function buildAlternateLinks(
   plan: RenderPlan,
   groups: Map<string, RenderPlan[]>,
@@ -33,17 +44,6 @@ export function buildAlternateLinks(
     baseUrl,
   )
   return [...sortAlternates(links, defaultLang), { lang: 'x-default', href: xDefaultHref }]
-}
-
-function resolveCanonicalRelative(
-  plan: RenderPlan,
-  groups: Map<string, RenderPlan[]>,
-): string {
-  const groupKey = plan.meta.translationOf ?? plan.meta.slug ?? 'page'
-  const group = groups.get(groupKey) ?? [plan]
-  const defaultLang = plan.meta.lang ?? 'en'
-  const english = group.find((entry) => entry.meta.lang === defaultLang)
-  return english?.relativeOutput ?? plan.relativeOutput
 }
 
 function sortAlternates(
