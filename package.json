@@ -14,6 +14,7 @@
   "scripts": {
     "build": "bun build ./src/index.ts --outdir ./dist --target node --format esm",
     "dev": "bun run build --watch",
+    "test": "bun test",
     "prepublishOnly": "bun run build"
   },
   "keywords": [
