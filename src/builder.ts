@@ -2,7 +2,6 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type {
   BuilderConfig,
-  FrontMatter,
   PageMeta,
   RenderPlan,
 } from './config.js'
@@ -11,7 +10,7 @@ import { createMarkdownRenderer } from './markdown.js'
 import { renderTemplate, clearTemplateCache } from './template.js'
 import { appendUtmParams, obfuscateMailtoLinks, collectMarkdownFiles } from './utils.js'
 
-export async function build(config: BuilderConfig): Promise<void> {
+export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
   clearTemplateCache()
 
   const contentDir = path.resolve(config.contentDir ?? 'content')
@@ -52,6 +51,8 @@ export async function build(config: BuilderConfig): Promise<void> {
 
   return plans
 }
+
+export type { RenderPlan }
 
 async function createPlan(
   filePath: string,
