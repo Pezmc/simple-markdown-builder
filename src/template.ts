@@ -39,7 +39,8 @@ export async function loadHomepageTemplate(
   return content
 }
 
-export function escapeHtml(text: string): string {
+export function escapeHtml(text: string | undefined): string {
+  if (!text) return ''
   return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -77,7 +78,7 @@ export async function renderTemplate(
     ? await loadHomepageTemplate(homepageTemplatePath, templatePath)
     : await loadTemplate(templatePath)
 
-  const outputPath = meta.output ?? 'index.html'
+  const outputPath = meta.output
   const canonicalUrl = canonicalRelative
     ? toAbsoluteUrl(normalizeIndexUrl(stripHtmlExtension(canonicalRelative)), baseUrl)
     : cleanUrl(outputPath, baseUrl)

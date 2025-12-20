@@ -9,7 +9,6 @@ export interface FrontMatter {
   readonly backLinkHref?: string
   readonly backLinkLabel?: string
   readonly slug?: string
-  readonly output?: string
   readonly lang?: string
   readonly translationOf?: string
   readonly translate?: string | boolean
@@ -25,7 +24,7 @@ export interface PageMeta {
   readonly backLinkHref: string
   readonly backLinkLabel: string
   readonly slug?: string
-  readonly output?: string
+  readonly output: string
   readonly lang?: string
   readonly translationOf?: string
   readonly translate?: string | boolean

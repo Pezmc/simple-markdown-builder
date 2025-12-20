@@ -45,7 +45,7 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
   await Promise.all(
     plans.map(async (plan) => {
       await mkdir(path.dirname(plan.outputPath), { recursive: true })
-      const isHomepage = plan.meta.output === 'index.html'
+      const isHomepage = plan.relativeOutput === 'index.html'
       const alternates = buildAlternateLinks(plan, groups, config.baseUrl, defaultLang)
       const canonicalRelative = resolveCanonicalRelative(plan, groups)
       const rendered = await renderTemplate(
@@ -100,7 +100,14 @@ async function createPlan(
     meta.slug ?? path.basename(filePath).replace(/\.md$/, ''),
   )
 
-  const outputName = (meta.output ?? `${slug}.html`).replace(/^\/+/, '')
+  // Preserve directory structure from content directory
+  // Language directories are preserved in output (e.g., fr/page.md -> fr/page.html)
+  // Other directories are also preserved (e.g., house-rules/page.md -> house-rules/page.html)
+  const relativeDir = path.dirname(relativeSource)
+  const outputName =
+    relativeDir !== '.'
+      ? path.join(relativeDir, `${slug}.html`).replace(/\\/g, '/')
+      : `${slug}.html`
   const outputPath = path.join(outputDir, ...outputName.split('/'))
 
   const mergedMeta: PageMeta = {
