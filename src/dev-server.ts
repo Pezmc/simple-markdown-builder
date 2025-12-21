@@ -3,11 +3,13 @@ import chokidar from 'chokidar'
 import type { BuilderConfig } from './config.js'
 import { build } from './builder.js'
 import { clearTemplateCache } from './template.js'
+import { cleanHtmlFiles } from './utils.js'
 
 export interface DevServerOptions {
   readonly port?: number
   readonly outputDir?: string
   readonly refreshTranslations?: boolean
+  readonly clean?: boolean
 }
 
 export async function startDevServer(
@@ -16,6 +18,12 @@ export async function startDevServer(
 ): Promise<void> {
   const outputDir = path.resolve(options.outputDir ?? config.outputDir ?? 'docs')
   const port = options.port ?? Number(process.env.PORT ?? 4173)
+
+  // Clean HTML files if requested (from options or config)
+  const shouldClean = options.clean ?? config.clean
+  if (shouldClean) {
+    await cleanHtmlFiles(outputDir)
+  }
 
   // Ensure translations if enabled and refresh requested
   if (config.translations !== false && options.refreshTranslations) {

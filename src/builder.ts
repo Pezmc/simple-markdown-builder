@@ -9,7 +9,7 @@ import { getDefaultLang, getSupportedLangs } from './config.js'
 import { extractFrontMatter, sanitizeLang, sanitizeSlug, inferLangFromPath } from './frontmatter.js'
 import { createMarkdownRenderer } from './markdown.js'
 import { renderTemplate, clearTemplateCache } from './template.js'
-import { appendUtmParams, obfuscateMailtoLinks, collectMarkdownFiles, extractSlugFromPath, normalizePathSeparators } from './utils.js'
+import { appendUtmParams, obfuscateMailtoLinks, collectMarkdownFiles, extractSlugFromPath, normalizePathSeparators, cleanHtmlFiles } from './utils.js'
 import { ensureTranslations } from './translations.js'
 import { writeSitemap, groupByTranslation, buildAlternateLinks, resolveCanonicalRelative } from './sitemap.js'
 import { checkLinks } from './link-checker.js'
@@ -19,6 +19,12 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
 
   const contentDir = path.resolve(config.contentDir ?? 'content')
   const outputDir = path.resolve(config.outputDir ?? 'docs')
+  
+  // Clean HTML files if requested
+  if (config.clean) {
+    await cleanHtmlFiles(outputDir)
+  }
+  
   const defaultLang = getDefaultLang(config)
   const supportedLangs = getSupportedLangs(config, defaultLang)
 
@@ -104,9 +110,11 @@ async function createPlan(
   // Preserve directory structure from content directory
   // Language directories are preserved in output (e.g., fr/page.md -> fr/page.html)
   // Other directories are also preserved (e.g., house-rules/page.md -> house-rules/page.html)
+  // If slug already contains a path (e.g., "39c3/rope-for-sale"), use it directly
   const relativeDir = path.dirname(relativeSource)
-  const outputName =
-    relativeDir !== '.'
+  const outputName = slug.includes('/')
+    ? normalizePathSeparators(`${slug}.html`)
+    : relativeDir !== '.'
       ? normalizePathSeparators(path.join(relativeDir, `${slug}.html`))
       : `${slug}.html`
   const outputPath = path.join(outputDir, ...outputName.split('/'))

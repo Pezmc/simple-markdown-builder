@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { readdir } from 'node:fs/promises'
+import { readdir, unlink } from 'node:fs/promises'
 import type { UtmParams } from './config.js'
 
 const ZERO_WIDTH_SPACE = '&#8203;'
@@ -128,5 +128,13 @@ export function extractSlugFromPath(filePath: string): string {
 
 export function normalizePathSeparators(pathString: string): string {
   return pathString.replace(/\\/g, '/')
+}
+
+export async function cleanHtmlFiles(dir: string): Promise<void> {
+  const htmlFiles = await collectHtmlFiles(dir)
+  await Promise.all(htmlFiles.map((filePath) => unlink(filePath)))
+  if (htmlFiles.length > 0) {
+    console.log(`Cleaned ${htmlFiles.length} HTML file(s) from ${path.relative(process.cwd(), dir)}`)
+  }
 }
 

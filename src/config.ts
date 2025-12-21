@@ -84,6 +84,7 @@ export interface BuilderConfig {
   readonly translations?: false | TranslationConfig
   readonly utmParams?: UtmParams
   readonly skipLinkCheck?: boolean
+  readonly clean?: boolean
 }
 
 export function getDefaultLang(config: BuilderConfig): string {
