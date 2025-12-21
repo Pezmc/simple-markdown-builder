@@ -109,8 +109,8 @@ async function createPlan(
 
   // Preserve directory structure from content directory
   // Language directories are preserved in output (e.g., fr/page.md -> fr/page.html)
-  // Other directories are also preserved (e.g., house-rules/page.md -> house-rules/page.html)
-  // If slug already contains a path (e.g., "39c3/rope-for-sale"), use it directly
+  // Other directories are also preserved (e.g., classes/beginner.md -> classes/beginner.html)
+  // If slug already contains a path (e.g., "shop/aerial-silks"), use it directly
   const relativeDir = path.dirname(relativeSource)
   const outputName = slug.includes('/')
     ? normalizePathSeparators(`${slug}.html`)

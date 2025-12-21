@@ -20,13 +20,13 @@ bun add simple-markdown-builder
 import { build } from 'simple-markdown-builder'
 
 await build({
-  baseUrl: 'https://example.com',
+  baseUrl: 'https://aerialyoga.example.com',
   templatePath: 'scripts/template.html',
   defaultMeta: {
-    title: 'My Site',
-    description: 'A simple site',
-    sidebarTitle: 'My Site',
-    sidebarSummary: 'Welcome to my site',
+    title: 'Aerial Yoga Studio',
+    description: 'Aerial yoga classes and equipment',
+    sidebarTitle: 'Aerial Yoga Studio',
+    sidebarSummary: 'Welcome to our aerial yoga studio',
     backLinkHref: '/',
     backLinkLabel: 'Back to home',
   },
@@ -39,7 +39,7 @@ await build({
 import { build, ensureTranslations } from 'simple-markdown-builder'
 
 const config = {
-  baseUrl: 'https://example.com',
+  baseUrl: 'https://aerialyoga.example.com',
   templatePath: 'scripts/template.html',
   defaultMeta: { /* ... */ },
   translations: {
@@ -49,7 +49,7 @@ const config = {
     supportedLangs: ['en', 'fr', 'nl'],
     customGlossary: {
       fr: {
-        'rope jam': 'rope jam',
+        'aerial silks': 'soies aériennes',
       },
     },
   },
@@ -132,15 +132,15 @@ Slugs default to the filename (without extension). Directory structure is automa
 
 - `content/index.md` → `docs/index.html`
 - `content/about.md` → `docs/about.html`
-- `content/docs/guide.md` → `docs/docs/guide.html`
+- `content/classes/beginner.md` → `docs/classes/beginner.html`
 
 You can override the slug in front matter if needed:
 
 ```markdown
 ---
-title: My Page
-slug: custom-slug
+title: About Us
+slug: about
 ---
 ```
 
-If the slug contains a path (e.g., `slug: 39c3/rope-for-sale`), it will be used directly for the output path.
+If the slug contains a path (e.g., `slug: shop/aerial-silks`), it will be used directly for the output path.
