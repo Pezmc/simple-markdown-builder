@@ -1,3 +1,4 @@
+import path from 'node:path'
 import type { FrontMatter } from './config.js'
 
 const FRONT_MATTER_BOUNDARY = /^---\s*$/
@@ -39,9 +40,7 @@ function parseMeta(lines: string[]): FrontMatter {
 
     // Handle boolean fields
     if (keyName === 'noindex' || keyName === 'translate') {
-      const normalized = rawValue.toLowerCase()
-      const value =
-        normalized === 'true' || normalized === 'yes' || normalized === '1'
+      const value = isBooleanEnabled(rawValue)
       return {
         ...acc,
         [keyName]: value,
@@ -93,6 +92,18 @@ export function sanitizeLang(input: string, supportedLangs: readonly string[], d
   const normalized = input?.toLowerCase()
   if (normalized && supportedLangs.includes(normalized)) {
     return normalized
+  }
+  return defaultLang
+}
+
+export function inferLangFromPath(
+  relativeSource: string,
+  supportedLangs: readonly string[],
+  defaultLang: string,
+): string {
+  const [maybeLang] = relativeSource.split(path.sep)
+  if (supportedLangs.includes(maybeLang)) {
+    return maybeLang
   }
   return defaultLang
 }

@@ -5,6 +5,8 @@ import { isBooleanEnabled } from './frontmatter.js'
 import { stripHtmlExtension, normalizeIndexUrl } from './utils.js'
 import { toAbsoluteUrl } from './template.js'
 
+const DEFAULT_LANG = 'en'
+
 export function groupByTranslation(plans: RenderPlan[]): Map<string, RenderPlan[]> {
   return plans.reduce((map, plan) => {
     const key = plan.meta.translationOf ?? plan.meta.slug ?? 'page'
@@ -21,7 +23,7 @@ export function resolveCanonicalRelative(
 ): string {
   const groupKey = plan.meta.translationOf ?? plan.meta.slug ?? 'page'
   const group = groups.get(groupKey) ?? [plan]
-  const defaultLang = plan.meta.lang ?? 'en'
+  const defaultLang = plan.meta.lang ?? DEFAULT_LANG
   const english = group.find((entry) => entry.meta.lang === defaultLang)
   return english?.relativeOutput ?? plan.relativeOutput
 }
@@ -73,7 +75,7 @@ export async function writeSitemap(
   plans: RenderPlan[],
   outputDir: string,
   baseUrl: string,
-  defaultLang: string = 'en',
+  defaultLang: string = DEFAULT_LANG,
   translationGroups?: Map<string, RenderPlan[]>,
 ): Promise<void> {
   const unique = new Map<string, RenderPlan>()

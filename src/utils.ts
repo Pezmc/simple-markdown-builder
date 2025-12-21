@@ -122,3 +122,11 @@ export function slugifyAnchor(text: string): string {
     .replace(/^-+|-+$/g, '')
 }
 
+export function extractSlugFromPath(filePath: string): string {
+  return path.basename(filePath).replace(/\.md$/, '')
+}
+
+export function normalizePathSeparators(pathString: string): string {
+  return pathString.replace(/\\/g, '/')
+}
+

@@ -38,17 +38,46 @@ function extractIdsFromHtml(html: string): Set<string> {
 function resolveInternalPath(href: string, fromFile: string, outputDir: string): string {
   const withoutHash = href.split('#')[0] ?? ''
   const withoutQuery = withoutHash.split('?')[0] ?? ''
+  
   if (withoutQuery.startsWith('/')) {
     const relativePath = withoutQuery.slice(1).replace(/\/+/g, '/')
     return path.normalize(path.join(outputDir, ...relativePath.split('/')))
   }
+  
   // For relative paths that don't go up (no ../), try resolving from OUTPUT_DIR first
   // This handles cases like img/logo.png which are meant to be from site root
   if (!withoutQuery.startsWith('../') && !path.isAbsolute(withoutQuery)) {
-    const rootResolved = path.normalize(path.join(outputDir, withoutQuery))
-    return rootResolved
+    return path.normalize(path.join(outputDir, withoutQuery))
   }
+  
   return path.normalize(path.resolve(path.dirname(fromFile), withoutQuery))
+}
+
+async function findTargetFile(
+  resolvedPath: string,
+): Promise<{ found: boolean; targetFile: string | null }> {
+  const normalizedResolved = path.normalize(resolvedPath)
+  const pathVariations = [
+    normalizedResolved,
+    `${normalizedResolved}.html`,
+    path.join(normalizedResolved, 'index.html'),
+  ]
+
+  for (const variation of pathVariations) {
+    try {
+      const normalizedVariation = path.normalize(variation)
+      const stats = await stat(normalizedVariation)
+      const checkPath = stats.isDirectory()
+        ? path.join(normalizedVariation, 'index.html')
+        : normalizedVariation
+      await stat(checkPath)
+      return { found: true, targetFile: checkPath }
+    } catch {
+      // Continue to next variation
+    }
+  }
+  
+  return { found: false, targetFile: null }
 }
 
 function extractHrefs(html: string): string[] {
@@ -94,31 +123,7 @@ export async function checkLinks(outputDir: string): Promise<void> {
       }
 
       const resolvedPath = resolveInternalPath(href, file, resolvedOutputDir)
-
-      const normalizedResolved = path.normalize(resolvedPath)
-      const pathVariations = [
-        normalizedResolved,
-        `${normalizedResolved}.html`,
-        path.join(normalizedResolved, 'index.html'),
-      ]
-
-      let found = false
-      let targetFile: string | null = null
-      for (const variation of pathVariations) {
-        try {
-          const normalizedVariation = path.normalize(variation)
-          const stats = await stat(normalizedVariation)
-          const checkPath = stats.isDirectory()
-            ? path.join(normalizedVariation, 'index.html')
-            : normalizedVariation
-          await stat(checkPath)
-          targetFile = checkPath
-          found = true
-          break
-        } catch {
-          // Continue to next variation
-        }
-      }
+      const { found, targetFile } = await findTargetFile(resolvedPath)
 
       if (!found) {
         missing.push({

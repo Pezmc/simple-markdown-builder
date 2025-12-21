@@ -3,6 +3,8 @@ import path from 'node:path'
 import type { PageMeta, iAlternateLink } from './config.js'
 import { normalizeIndexUrl, stripHtmlExtension } from './utils.js'
 
+const DEFAULT_LANG = 'en'
+
 let templateCache: Map<string, string> = new Map()
 let homepageTemplateCache: Map<string, string> = new Map()
 
@@ -63,6 +65,17 @@ export function cleanUrl(relativePath: string, baseUrl: string): string {
   return new URL(normalized, baseUrl).toString()
 }
 
+const REQUIRED_PLACEHOLDERS = ['{{TITLE}}', '{{BODY}}']
+
+function validateTemplatePlaceholders(template: string, templatePath: string): void {
+  const missing = REQUIRED_PLACEHOLDERS.filter((placeholder) => !template.includes(placeholder))
+  if (missing.length > 0) {
+    console.warn(
+      `Template ${templatePath} is missing required placeholders: ${missing.join(', ')}`,
+    )
+  }
+}
+
 export async function renderTemplate(
   body: string,
   meta: PageMeta,
@@ -73,10 +86,11 @@ export async function renderTemplate(
   alternates?: iAlternateLink[],
   canonicalRelative?: string,
 ): Promise<string> {
-  const defaultLang = 'en'
   const template = isHomepage && homepageTemplatePath
     ? await loadHomepageTemplate(homepageTemplatePath, templatePath)
     : await loadTemplate(templatePath)
+  
+  validateTemplatePlaceholders(template, templatePath)
 
   const outputPath = meta.output
   const canonicalUrl = canonicalRelative
@@ -102,7 +116,7 @@ export async function renderTemplate(
     : ''
 
   const languageSwitcher = alternates
-    ? renderLanguageSwitcher(meta.lang ?? defaultLang, alternates)
+    ? renderLanguageSwitcher(meta.lang ?? DEFAULT_LANG, alternates)
     : ''
 
   return template
@@ -119,7 +133,7 @@ export async function renderTemplate(
     .replace(/\{\{HREFLANG_LINKS\}\}/g, hreflangLinks)
     .replace(/\{\{NOINDEX\}\}/g, noindexTag)
     .replace(/\{\{LANGUAGE_SWITCHER\}\}/g, languageSwitcher)
-    .replace(/\{\{LANG\}\}/g, meta.lang ?? defaultLang)
+    .replace(/\{\{LANG\}\}/g, meta.lang ?? DEFAULT_LANG)
     .replace(/\{\{BACK_LINK_HREF\}\}/g, escapeHtml(meta.backLinkHref))
     .replace(/\{\{BACK_LINK_LABEL\}\}/g, escapeHtml(meta.backLinkLabel))
     .replace(/\{\{SIDEBAR_TITLE\}\}/g, escapeHtml(meta.sidebarTitle))

@@ -8,8 +8,9 @@ import type {
   TranslatePlan,
   TranslationConfig,
 } from './config.js'
-import { extractFrontMatter, sanitizeSlug, isBooleanEnabled as isTranslateEnabled } from './frontmatter.js'
-import { collectMarkdownFiles } from './utils.js'
+import { getDefaultLang, getSupportedLangs } from './config.js'
+import { extractFrontMatter, sanitizeSlug, isBooleanEnabled as isTranslateEnabled, inferLangFromPath } from './frontmatter.js'
+import { collectMarkdownFiles, extractSlugFromPath } from './utils.js'
 
 let translatorInstance: Translator | null | undefined
 let translationWarned = false
@@ -37,8 +38,8 @@ export async function ensureTranslations(
     return
   }
 
-  const defaultLang = config.translations.defaultLang ?? 'en'
-  const supportedLangs = config.translations.supportedLangs ?? [defaultLang]
+  const defaultLang = getDefaultLang(config)
+  const supportedLangs = getSupportedLangs(config, defaultLang)
   const targetLangs = config.translations.targetLanguages
 
   const markdownFiles = await collectMarkdownFiles(contentDir)
@@ -46,13 +47,13 @@ export async function ensureTranslations(
   const translationPlans: TranslatePlan[] = []
   for (const sourcePath of markdownFiles) {
     const relativeSource = path.relative(contentDir, sourcePath)
-    const [firstSegment] = relativeSource.split(path.sep)
-    if (supportedLangs.includes(firstSegment) && firstSegment !== defaultLang) {
+    const inferredLang = inferLangFromPath(relativeSource, supportedLangs, defaultLang)
+    if (inferredLang !== defaultLang && supportedLangs.includes(inferredLang)) {
       continue
     }
     const raw = await readFile(sourcePath, 'utf-8')
     const { body, meta } = extractFrontMatter(raw)
-    const lang = meta.lang ?? firstSegment
+    const lang = meta.lang ?? inferredLang
     if (lang !== defaultLang) {
       continue
     }
@@ -62,7 +63,7 @@ export async function ensureTranslations(
     }
 
     const slug = sanitizeSlug(
-      meta.slug ?? path.basename(sourcePath).replace(/\.md$/, ''),
+      meta.slug ?? extractSlugFromPath(sourcePath),
     )
     const translationOf = (meta.translationOf ?? slug).trim() || slug
     const relativeDir = path.dirname(relativeSource)

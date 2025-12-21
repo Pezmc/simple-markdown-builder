@@ -5,10 +5,11 @@ import type {
   PageMeta,
   RenderPlan,
 } from './config.js'
-import { extractFrontMatter, sanitizeLang, sanitizeSlug } from './frontmatter.js'
+import { getDefaultLang, getSupportedLangs } from './config.js'
+import { extractFrontMatter, sanitizeLang, sanitizeSlug, inferLangFromPath } from './frontmatter.js'
 import { createMarkdownRenderer } from './markdown.js'
 import { renderTemplate, clearTemplateCache } from './template.js'
-import { appendUtmParams, obfuscateMailtoLinks, collectMarkdownFiles } from './utils.js'
+import { appendUtmParams, obfuscateMailtoLinks, collectMarkdownFiles, extractSlugFromPath, normalizePathSeparators } from './utils.js'
 import { ensureTranslations } from './translations.js'
 import { writeSitemap, groupByTranslation, buildAlternateLinks, resolveCanonicalRelative } from './sitemap.js'
 import { checkLinks } from './link-checker.js'
@@ -18,8 +19,8 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
 
   const contentDir = path.resolve(config.contentDir ?? 'content')
   const outputDir = path.resolve(config.outputDir ?? 'docs')
-  const defaultLang = config.translations !== false ? (config.translations?.defaultLang ?? 'en') : 'en'
-  const supportedLangs = config.translations !== false ? (config.translations?.supportedLangs ?? [defaultLang]) : [defaultLang]
+  const defaultLang = getDefaultLang(config)
+  const supportedLangs = getSupportedLangs(config, defaultLang)
 
   // Ensure translations if enabled
   if (config.translations !== false) {
@@ -97,7 +98,7 @@ async function createPlan(
   )
 
   const slug = sanitizeSlug(
-    meta.slug ?? path.basename(filePath).replace(/\.md$/, ''),
+    meta.slug ?? extractSlugFromPath(filePath),
   )
 
   // Preserve directory structure from content directory
@@ -106,7 +107,7 @@ async function createPlan(
   const relativeDir = path.dirname(relativeSource)
   const outputName =
     relativeDir !== '.'
-      ? path.join(relativeDir, `${slug}.html`).replace(/\\/g, '/')
+      ? normalizePathSeparators(path.join(relativeDir, `${slug}.html`))
       : `${slug}.html`
   const outputPath = path.join(outputDir, ...outputName.split('/'))
 
@@ -131,15 +132,4 @@ async function createPlan(
   }
 }
 
-function inferLangFromPath(
-  relativeSource: string,
-  supportedLangs: readonly string[],
-  defaultLang: string,
-): string {
-  const [maybeLang] = relativeSource.split(path.sep)
-  if (supportedLangs.includes(maybeLang)) {
-    return maybeLang
-  }
-  return defaultLang
-}
 

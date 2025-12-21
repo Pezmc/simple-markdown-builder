@@ -86,3 +86,13 @@ export interface BuilderConfig {
   readonly skipLinkCheck?: boolean
 }
 
+export function getDefaultLang(config: BuilderConfig): string {
+  return config.translations !== false ? (config.translations?.defaultLang ?? 'en') : 'en'
+}
+
+export function getSupportedLangs(config: BuilderConfig, defaultLang: string): readonly string[] {
+  return config.translations !== false
+    ? (config.translations?.supportedLangs ?? [defaultLang])
+    : [defaultLang]
+}
+

@@ -74,8 +74,14 @@ export async function startDevServer(
     isBuilding = true
     console.log('Rebuilding...')
     build(config)
+      .then(() => {
+        console.log('Build completed successfully.')
+      })
       .catch((error) => {
-        console.error(error)
+        console.error('Build failed:', error instanceof Error ? error.message : String(error))
+        if (error instanceof Error && error.stack) {
+          console.error(error.stack)
+        }
       })
       .finally(() => {
         isBuilding = false

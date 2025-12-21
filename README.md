@@ -97,6 +97,15 @@ Templates support these placeholders:
 - `{{TWITTER_TITLE}}` - Twitter card title
 - `{{TWITTER_DESCRIPTION}}` - Twitter card description
 - `{{TWITTER_IMAGE}}` - Twitter card image
+- `{{HREFLANG_LINKS}}` - Alternate language links
+- `{{NOINDEX}}` - Robots noindex meta tag (if enabled)
+- `{{LANGUAGE_SWITCHER}}` - Language selector UI
+- `{{LANG}}` - Current page language code
+- `{{BACK_LINK_HREF}}` - Back link URL
+- `{{BACK_LINK_LABEL}}` - Back link text
+- `{{SIDEBAR_TITLE}}` - Sidebar title
+- `{{SIDEBAR_SUMMARY}}` - Sidebar summary
+- `{{YEAR}}` - Current year
 
 ### UTM Parameters
 
