@@ -2,6 +2,7 @@ import path from 'node:path'
 import chokidar from 'chokidar'
 import type { BuilderConfig } from './config.js'
 import { build } from './builder.js'
+import { clearTemplateCache } from './template.js'
 
 export interface DevServerOptions {
   readonly port?: number
@@ -26,21 +27,52 @@ export async function startDevServer(
   // Initial build
   await build(config)
 
-  // Start file watcher
+  // Start file watchers
   const contentDir = path.resolve(config.contentDir ?? 'content')
-  const watcher = chokidar.watch(path.join(contentDir, '**/*.md'), {
+  const templatePath = config.templatePath ? path.resolve(config.templatePath) : null
+  const homepageTemplatePath = config.homepageTemplatePath
+    ? path.resolve(config.homepageTemplatePath)
+    : null
+
+  const watchedPaths: string[] = [contentDir]
+  if (templatePath) {
+    const templateDir = path.dirname(templatePath)
+    if (!watchedPaths.includes(templateDir)) {
+      watchedPaths.push(templateDir)
+    }
+  }
+  if (homepageTemplatePath) {
+    const homepageTemplateDir = path.dirname(homepageTemplatePath)
+    if (!watchedPaths.includes(homepageTemplateDir)) {
+      watchedPaths.push(homepageTemplateDir)
+    }
+  }
+
+  console.log('Watching directories:', watchedPaths)
+
+  const watcher = chokidar.watch(watchedPaths, {
     ignoreInitial: true,
+    persistent: true,
   })
 
   let isBuilding = false
   let shouldRebuild = false
 
-  const queueBuild = (): void => {
+  const queueBuild = (filePath?: string): void => {
+    // Clear template cache if a template file changed
+    if (filePath) {
+      const resolvedPath = path.resolve(filePath)
+      if (resolvedPath === templatePath || resolvedPath === homepageTemplatePath) {
+        clearTemplateCache()
+      }
+    }
+
     if (isBuilding) {
       shouldRebuild = true
       return
     }
     isBuilding = true
+    console.log('Rebuilding...')
     build(config)
       .catch((error) => {
         console.error(error)
@@ -54,8 +86,57 @@ export async function startDevServer(
       })
   }
 
-  watcher.on('add', queueBuild).on('change', queueBuild).on('unlink', queueBuild)
-  console.log('Watching content/ for Markdown changes...')
+  const shouldTriggerBuild = (filePath: string): boolean => {
+    const resolved = path.resolve(filePath)
+    const ext = path.extname(resolved)
+
+    // Watch markdown files in content directory (including subdirectories)
+    if (ext === '.md') {
+      const contentDirNormalized = path.resolve(contentDir)
+      const resolvedNormalized = path.resolve(resolved)
+      const relative = path.relative(contentDirNormalized, resolvedNormalized)
+      // Check that the file is within the content directory (not outside)
+      if (relative && !relative.startsWith('..') && !path.isAbsolute(relative)) {
+        return true
+      }
+    }
+
+    // Watch template files
+    if (templatePath && resolved === templatePath) {
+      return true
+    }
+    if (homepageTemplatePath && resolved === homepageTemplatePath) {
+      return true
+    }
+
+    return false
+  }
+
+  watcher
+    .on('add', (filePath) => {
+      if (shouldTriggerBuild(filePath)) {
+        console.log(`File added: ${filePath}`)
+        queueBuild(filePath)
+      }
+    })
+    .on('change', (filePath) => {
+      if (shouldTriggerBuild(filePath)) {
+        console.log(`File changed: ${filePath}`)
+        queueBuild(filePath)
+      }
+    })
+    .on('unlink', (filePath) => {
+      if (shouldTriggerBuild(filePath)) {
+        console.log(`File removed: ${filePath}`)
+        queueBuild(filePath)
+      }
+    })
+    .on('error', (error) => {
+      console.error('Watcher error:', error)
+    })
+    .on('ready', () => {
+      console.log('File watcher ready. Watching for changes to markdown files and templates...')
+    })
 
   // Start HTTP server
   const server = Bun.serve({
