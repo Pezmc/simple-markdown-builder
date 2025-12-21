@@ -67,6 +67,8 @@ import { startDevServer } from 'simple-markdown-builder'
 await startDevServer(config, {
   port: 4173,
   outputDir: 'docs',
+  clean: true, // Optional: clean HTML files before building
+  refreshTranslations: false, // Optional: refresh translations on start
 })
 ```
 
@@ -82,6 +84,7 @@ await startDevServer(config, {
 - `translations` - Translation config: `false` to disable, or object with DeepL settings
 - `utmParams` - UTM parameters object for external links
 - `skipLinkCheck` - Whether to skip link validation
+- `clean` - Clean HTML files from output directory before building (default: `false`)
 
 ### Template Placeholders
 
@@ -123,3 +126,21 @@ UTM parameters are provided as an object:
 
 These are automatically appended to external links.
 
+### Slugs and File Paths
+
+Slugs default to the filename (without extension). Directory structure is automatically preserved in the output:
+
+- `content/index.md` → `docs/index.html`
+- `content/about.md` → `docs/about.html`
+- `content/docs/guide.md` → `docs/docs/guide.html`
+
+You can override the slug in front matter if needed:
+
+```markdown
+---
+title: My Page
+slug: custom-slug
+---
+```
+
+If the slug contains a path (e.g., `slug: 39c3/rope-for-sale`), it will be used directly for the output path.
