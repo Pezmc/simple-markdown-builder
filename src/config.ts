@@ -14,6 +14,7 @@ export interface FrontMatter {
   readonly translate?: string | boolean
   readonly noindex?: string | boolean
   readonly ogImage?: string
+  readonly twitterImage?: string
 }
 
 export interface PageMeta {
@@ -30,6 +31,7 @@ export interface PageMeta {
   readonly translate?: string | boolean
   readonly noindex?: string | boolean
   readonly ogImage?: string
+  readonly twitterImage?: string
 }
 
 export interface RenderPlan {

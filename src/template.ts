@@ -112,9 +112,9 @@ function generateHeadTags(
   tags.push(`    <meta name="twitter:title" content="${escapeHtml(meta.title)}" />`)
   tags.push(`    <meta name="twitter:description" content="${escapeHtml(meta.description)}" />`)
 
-  if (meta.ogImage) {
-    const ogImageUrl = toAbsoluteUrl(meta.ogImage, baseUrl)
-    tags.push(`    <meta name="twitter:image" content="${ogImageUrl}" />`)
+  if (meta.twitterImage) {
+    const twitterImageUrl = toAbsoluteUrl(meta.twitterImage, baseUrl)
+    tags.push(`    <meta name="twitter:image" content="${twitterImageUrl}" />`)
   }
 
   // Hreflang links

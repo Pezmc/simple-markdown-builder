@@ -46,7 +46,6 @@ test('renderTemplate - generates meta tags with ogImage', async () => {
 <html>
 <head>
   <title>{{TITLE}}</title>
-  {{META_TAGS}}
 </head>
 <body>{{BODY}}</body>
 </html>`,
@@ -75,10 +74,10 @@ test('renderTemplate - generates meta tags with ogImage', async () => {
   expect(result).toContain('<meta property="og:description" content="Test Description" />')
   expect(result).toContain('<meta property="og:image" content="https://example.com/img/test-og.png" />')
   expect(result).toContain('<meta name="twitter:card" content="summary_large_image" />')
-  expect(result).toContain('<meta name="twitter:image" content="https://example.com/img/test-og.png" />')
+  expect(result).not.toContain('<meta name="twitter:image"')
 })
 
-test('renderTemplate - omits ogImage tags when not provided', async () => {
+test('renderTemplate - uses twitterImage when provided', async () => {
   const templatePath = path.join(TEST_TEMPLATE_DIR, 'template.html')
   await writeFile(
     templatePath,
@@ -86,7 +85,77 @@ test('renderTemplate - omits ogImage tags when not provided', async () => {
 <html>
 <head>
   <title>{{TITLE}}</title>
-  {{META_TAGS}}
+</head>
+<body>{{BODY}}</body>
+</html>`,
+  )
+
+  const meta: PageMeta = {
+    title: 'Test Page',
+    description: 'Test Description',
+    sidebarTitle: 'Test',
+    sidebarSummary: 'Test',
+    backLinkHref: '/',
+    backLinkLabel: 'Back',
+    output: 'test.html',
+    ogImage: 'img/test-og.png',
+    twitterImage: 'img/test-twitter.png',
+  }
+
+  const result = await renderTemplate(
+    '<p>Body content</p>',
+    meta,
+    templatePath,
+    'https://example.com',
+  )
+
+  expect(result).toContain('<meta property="og:image" content="https://example.com/img/test-og.png" />')
+  expect(result).toContain('<meta name="twitter:image" content="https://example.com/img/test-twitter.png" />')
+})
+
+test('renderTemplate - omits twitterImage when not explicitly set', async () => {
+  const templatePath = path.join(TEST_TEMPLATE_DIR, 'template.html')
+  await writeFile(
+    templatePath,
+    `<!DOCTYPE html>
+<html>
+<head>
+  <title>{{TITLE}}</title>
+</head>
+<body>{{BODY}}</body>
+</html>`,
+  )
+
+  const meta: PageMeta = {
+    title: 'Test Page',
+    description: 'Test Description',
+    sidebarTitle: 'Test',
+    sidebarSummary: 'Test',
+    backLinkHref: '/',
+    backLinkLabel: 'Back',
+    output: 'test.html',
+    ogImage: 'img/test-og.png',
+  }
+
+  const result = await renderTemplate(
+    '<p>Body content</p>',
+    meta,
+    templatePath,
+    'https://example.com',
+  )
+
+  expect(result).toContain('<meta property="og:image" content="https://example.com/img/test-og.png" />')
+  expect(result).not.toContain('<meta name="twitter:image"')
+})
+
+test('renderTemplate - omits ogImage and twitterImage tags when not provided', async () => {
+  const templatePath = path.join(TEST_TEMPLATE_DIR, 'template.html')
+  await writeFile(
+    templatePath,
+    `<!DOCTYPE html>
+<html>
+<head>
+  <title>{{TITLE}}</title>
 </head>
 <body>{{BODY}}</body>
 </html>`,
