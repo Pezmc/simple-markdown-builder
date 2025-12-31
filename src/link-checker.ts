@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import type { MissingLink } from './config.js'
-import { collectHtmlFiles, slugifyAnchor } from './utils.js'
+import { collectHtmlFiles, slugifyAnchor, logWarning } from './utils.js'
 
 const SKIP_PREFIXES = ['mailto:', 'tel:', 'javascript:', 'data:']
 const SKIP_SCHEMES = ['http://', 'https://']
@@ -89,7 +89,7 @@ export async function checkLinks(outputDir: string): Promise<void> {
   const resolvedOutputDir = path.resolve(outputDir)
   const htmlFiles = await collectHtmlFiles(resolvedOutputDir)
   if (htmlFiles.length === 0) {
-    console.warn('No generated HTML files found. Skipping link check.')
+    logWarning('No generated HTML files found. Skipping link check.')
     return
   }
 

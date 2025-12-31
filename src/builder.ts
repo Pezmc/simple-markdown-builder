@@ -9,7 +9,7 @@ import { getDefaultLang, getSupportedLangs } from './config.js'
 import { extractFrontMatter, sanitizeLang, sanitizeSlug, inferLangFromPath } from './frontmatter.js'
 import { createMarkdownRenderer } from './markdown.js'
 import { renderTemplate, clearTemplateCache } from './template.js'
-import { appendUtmParams, obfuscateMailtoLinks, collectMarkdownFiles, extractSlugFromPath, normalizePathSeparators, cleanHtmlFiles } from './utils.js'
+import { appendUtmParams, obfuscateMailtoLinks, collectMarkdownFiles, extractSlugFromPath, normalizePathSeparators, cleanHtmlFiles, logWarning } from './utils.js'
 import { ensureTranslations } from './translations.js'
 import { writeSitemap, groupByTranslation, buildAlternateLinks, resolveCanonicalRelative } from './sitemap.js'
 import { checkLinks } from './link-checker.js'
@@ -36,7 +36,7 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
   const markdownFiles = await collectMarkdownFiles(contentDir)
 
   if (markdownFiles.length === 0) {
-    console.warn('No markdown files found in content/.')
+    logWarning('No markdown files found in content/.')
     return []
   }
 
