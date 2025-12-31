@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { PageMeta, iAlternateLink } from './config.js'
-import { normalizeIndexUrl, stripHtmlExtension } from './utils.js'
+import { normalizeIndexUrl, stripHtmlExtension, logWarning, logError } from './utils.js'
 
 const DEFAULT_LANG = 'en'
 
@@ -70,10 +70,72 @@ const REQUIRED_PLACEHOLDERS = ['{{TITLE}}', '{{BODY}}']
 function validateTemplatePlaceholders(template: string, templatePath: string): void {
   const missing = REQUIRED_PLACEHOLDERS.filter((placeholder) => !template.includes(placeholder))
   if (missing.length > 0) {
-    console.warn(
+    logWarning(
       `Template ${templatePath} is missing required placeholders: ${missing.join(', ')}`,
     )
   }
+}
+
+function generateHeadTags(
+  meta: PageMeta,
+  baseUrl: string,
+  canonicalUrl: string,
+  pageUrl: string,
+  alternates?: iAlternateLink[],
+): string {
+  const tags: string[] = []
+
+  // Meta description
+  tags.push(`    <meta name="description" content="${escapeHtml(meta.description)}" />`)
+
+  // Canonical URL
+  tags.push(`    <link rel="canonical" href="${canonicalUrl}" />`)
+
+  // Open Graph tags
+  tags.push(`    <meta property="og:url" content="${pageUrl}" />`)
+  tags.push(`    <meta property="og:title" content="${escapeHtml(meta.title)}" />`)
+  tags.push(`    <meta property="og:description" content="${escapeHtml(meta.description)}" />`)
+
+  // ogImage handling with warning
+  if (meta.ogImage) {
+    const ogImageUrl = toAbsoluteUrl(meta.ogImage, baseUrl)
+    tags.push(`    <meta property="og:image" content="${ogImageUrl}" />`)
+  } else {
+    logWarning(
+      `Missing ogImage for page "${meta.output}". ` +
+      `Set ogImage in defaultMeta or page front-matter to include Open Graph image tags.`,
+    )
+  }
+
+  // Twitter Card tags
+  tags.push(`    <meta name="twitter:card" content="summary_large_image" />`)
+  tags.push(`    <meta name="twitter:title" content="${escapeHtml(meta.title)}" />`)
+  tags.push(`    <meta name="twitter:description" content="${escapeHtml(meta.description)}" />`)
+
+  if (meta.twitterImage) {
+    const twitterImageUrl = toAbsoluteUrl(meta.twitterImage, baseUrl)
+    tags.push(`    <meta name="twitter:image" content="${twitterImageUrl}" />`)
+  }
+
+  // Hreflang links
+  if (alternates) {
+    const hreflangLinks = alternates
+      .filter((alt) => alt.lang !== 'x-default')
+      .map(
+        (alt) =>
+          `    <link rel="alternate" href="${alt.href}" hreflang="${alt.lang}" />`,
+      )
+    if (hreflangLinks.length > 0) {
+      tags.push(...hreflangLinks)
+    }
+  }
+
+  // Noindex tag
+  if (meta.noindex) {
+    tags.push(`    <meta name="robots" content="noindex, nofollow" />`)
+  }
+
+  return tags.join('\n')
 }
 
 export async function renderTemplate(
@@ -97,41 +159,14 @@ export async function renderTemplate(
     ? toAbsoluteUrl(normalizeIndexUrl(stripHtmlExtension(canonicalRelative)), baseUrl)
     : cleanUrl(outputPath, baseUrl)
   const pageUrl = cleanUrl(outputPath, baseUrl)
-  const ogImage = meta.ogImage
-    ? toAbsoluteUrl(meta.ogImage, baseUrl)
-    : toAbsoluteUrl('img/default-og.png', baseUrl)
-
-  const hreflangLinks = alternates
-    ? alternates
-        .filter((alt) => alt.lang !== 'x-default')
-        .map(
-          (alt) =>
-            `    <link rel="alternate" href="${alt.href}" hreflang="${alt.lang}" />`,
-        )
-        .join('\n')
-    : ''
-
-  const noindexTag = meta.noindex
-    ? '    <meta name="robots" content="noindex, nofollow" />'
-    : ''
 
   const languageSwitcher = alternates
     ? renderLanguageSwitcher(meta.lang ?? DEFAULT_LANG, alternates)
     : ''
 
-  return template
+  let rendered = template
     .replace(/\{\{TITLE\}\}/g, escapeHtml(meta.title))
     .replace(/\{\{DESCRIPTION\}\}/g, escapeHtml(meta.description))
-    .replace(/\{\{CANONICAL_URL\}\}/g, canonicalUrl)
-    .replace(/\{\{OG_URL\}\}/g, pageUrl)
-    .replace(/\{\{OG_TITLE\}\}/g, escapeHtml(meta.title))
-    .replace(/\{\{OG_DESCRIPTION\}\}/g, escapeHtml(meta.description))
-    .replace(/\{\{OG_IMAGE\}\}/g, ogImage)
-    .replace(/\{\{TWITTER_TITLE\}\}/g, escapeHtml(meta.title))
-    .replace(/\{\{TWITTER_DESCRIPTION\}\}/g, escapeHtml(meta.description))
-    .replace(/\{\{TWITTER_IMAGE\}\}/g, ogImage)
-    .replace(/\{\{HREFLANG_LINKS\}\}/g, hreflangLinks)
-    .replace(/\{\{NOINDEX\}\}/g, noindexTag)
     .replace(/\{\{LANGUAGE_SWITCHER\}\}/g, languageSwitcher)
     .replace(/\{\{LANG\}\}/g, meta.lang ?? DEFAULT_LANG)
     .replace(/\{\{BACK_LINK_HREF\}\}/g, escapeHtml(meta.backLinkHref))
@@ -140,6 +175,22 @@ export async function renderTemplate(
     .replace(/\{\{SIDEBAR_SUMMARY\}\}/g, escapeHtml(meta.sidebarSummary))
     .replace(/\{\{YEAR\}\}/g, new Date().getFullYear().toString())
     .replace(/\{\{BODY\}\}/g, body)
+
+  // Automatically inject all head tags before </head>
+  const headEndMatch = rendered.match(/<\/head>/i)
+  if (!headEndMatch) {
+    logError(`Template ${templatePath} is missing </head> tag. Cannot inject meta tags.`)
+    throw new Error(`Template ${templatePath} is missing </head> tag`)
+  }
+
+  const headTags = generateHeadTags(meta, baseUrl, canonicalUrl, pageUrl, alternates)
+  const insertPosition = headEndMatch.index!
+  rendered =
+    rendered.slice(0, insertPosition) +
+    `${headTags}\n` +
+    rendered.slice(insertPosition)
+
+  return rendered
 }
 
 function renderLanguageSwitcher(

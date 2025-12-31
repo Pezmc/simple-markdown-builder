@@ -14,6 +14,7 @@ export interface FrontMatter {
   readonly translate?: string | boolean
   readonly noindex?: string | boolean
   readonly ogImage?: string
+  readonly twitterImage?: string
 }
 
 export interface PageMeta {
@@ -30,6 +31,7 @@ export interface PageMeta {
   readonly translate?: string | boolean
   readonly noindex?: string | boolean
   readonly ogImage?: string
+  readonly twitterImage?: string
 }
 
 export interface RenderPlan {
@@ -77,7 +79,7 @@ export interface BuilderConfig {
   readonly contentDir?: string
   readonly outputDir?: string
   readonly baseUrl: string
-  readonly defaultMeta: Omit<PageMeta, 'slug' | 'output' | 'lang' | 'translationOf' | 'translate' | 'noindex' | 'ogImage'>
+  readonly defaultMeta: Omit<PageMeta, 'slug' | 'output' | 'lang' | 'translationOf' | 'translate' | 'noindex'>
   readonly templatePath: string
   readonly homepageTemplatePath?: string
   readonly markdownOptions?: MarkdownItOptions

@@ -92,16 +92,6 @@ Templates support these placeholders:
 - `{{TITLE}}` - Page title
 - `{{DESCRIPTION}}` - Page description
 - `{{BODY}}` - Rendered HTML body
-- `{{CANONICAL_URL}}` - Canonical URL
-- `{{OG_URL}}` - Open Graph URL
-- `{{OG_TITLE}}` - Open Graph title
-- `{{OG_DESCRIPTION}}` - Open Graph description
-- `{{OG_IMAGE}}` - Open Graph image
-- `{{TWITTER_TITLE}}` - Twitter card title
-- `{{TWITTER_DESCRIPTION}}` - Twitter card description
-- `{{TWITTER_IMAGE}}` - Twitter card image
-- `{{HREFLANG_LINKS}}` - Alternate language links
-- `{{NOINDEX}}` - Robots noindex meta tag (if enabled)
 - `{{LANGUAGE_SWITCHER}}` - Language selector UI
 - `{{LANG}}` - Current page language code
 - `{{BACK_LINK_HREF}}` - Back link URL
@@ -109,6 +99,54 @@ Templates support these placeholders:
 - `{{SIDEBAR_TITLE}}` - Sidebar title
 - `{{SIDEBAR_SUMMARY}}` - Sidebar summary
 - `{{YEAR}}` - Current year
+
+
+### Open Graph and Twitter Images
+
+Images can be set in two ways:
+1. **Default for all pages**: Set in `defaultMeta` configuration
+2. **Per-page**: Set in the page's front-matter
+
+**ogImage**: Used for Open Graph tags. If not provided, a warning is logged and the tag is omitted.
+
+**twitterImage**: Used for Twitter Card image. Only set if explicitly provided (no fallback to ogImage).
+
+Example:
+
+```typescript
+await build({
+  baseUrl: 'https://example.com',
+  templatePath: 'template.html',
+  defaultMeta: {
+    title: 'My Site',
+    description: 'Site description',
+    ogImage: 'img/default-og.png', // Default for all pages
+    twitterImage: 'img/default-twitter.png', // Optional
+    // ... other meta fields
+  },
+})
+```
+
+Or per-page in front-matter:
+
+```markdown
+---
+title: My Page
+ogImage: img/page-specific-og.png
+twitterImage: img/page-specific-twitter.png
+---
+```
+
+### Breaking Changes in v1.0
+
+**Template Placeholders Removed**: The following placeholders are no longer needed - meta tags are automatically injected:
+- `{{OG_URL}}`, `{{OG_TITLE}}`, `{{OG_DESCRIPTION}}`, `{{OG_IMAGE}}`
+- `{{TWITTER_TITLE}}`, `{{TWITTER_DESCRIPTION}}`, `{{TWITTER_IMAGE}}`
+- `{{CANONICAL_URL}}`, `{{HREFLANG_LINKS}}`, `{{NOINDEX}}`, `{{META_TAGS}}`
+
+**Note**: `{{DESCRIPTION}}` is still available as a template placeholder for use in the body content, but the meta description tag is automatically injected in the head.
+
+**Migration**: Remove these placeholders from your templates. Ensure your template has a `</head>` tag - all meta tags will be automatically injected before it.
 
 ### UTM Parameters
 

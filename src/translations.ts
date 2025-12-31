@@ -10,7 +10,7 @@ import type {
 } from './config.js'
 import { getDefaultLang, getSupportedLangs } from './config.js'
 import { extractFrontMatter, sanitizeSlug, isBooleanEnabled as isTranslateEnabled, inferLangFromPath } from './frontmatter.js'
-import { collectMarkdownFiles, extractSlugFromPath } from './utils.js'
+import { collectMarkdownFiles, extractSlugFromPath, logWarning } from './utils.js'
 
 let translatorInstance: Translator | null | undefined
 let translationWarned = false
@@ -33,7 +33,7 @@ export async function ensureTranslations(
   if (!translator) {
     if (!translationWarned && config.translations.targetLanguages.length > 0) {
       translationWarned = true
-      console.warn('Skipping automatic translations: set API key to enable.')
+      logWarning('Skipping automatic translations: set API key to enable.')
     }
     return
   }

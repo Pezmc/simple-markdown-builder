@@ -3,7 +3,7 @@ import chokidar from 'chokidar'
 import type { BuilderConfig } from './config.js'
 import { build } from './builder.js'
 import { clearTemplateCache } from './template.js'
-import { cleanHtmlFiles } from './utils.js'
+import { cleanHtmlFiles, logError } from './utils.js'
 
 export interface DevServerOptions {
   readonly port?: number
@@ -86,9 +86,9 @@ export async function startDevServer(
         console.log('Build completed successfully.')
       })
       .catch((error) => {
-        console.error('Build failed:', error instanceof Error ? error.message : String(error))
+        logError('Build failed:', error instanceof Error ? error.message : String(error))
         if (error instanceof Error && error.stack) {
-          console.error(error.stack)
+          logError(error.stack)
         }
       })
       .finally(() => {
@@ -146,7 +146,7 @@ export async function startDevServer(
       }
     })
     .on('error', (error) => {
-      console.error('Watcher error:', error)
+      logError('Watcher error:', error)
     })
     .on('ready', () => {
       console.log('File watcher ready. Watching for changes to markdown files and templates...')

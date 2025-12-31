@@ -39,8 +39,6 @@ Content here
 <html lang="{{LANG}}">
 <head>
   <title>{{TITLE}}</title>
-  <meta name="description" content="{{DESCRIPTION}}" />
-  <link rel="canonical" href="{{CANONICAL_URL}}" />
 </head>
 <body>{{BODY}}</body>
 </html>`,
@@ -214,8 +212,6 @@ Content here
 <html lang="{{LANG}}">
 <head>
   <title>{{TITLE}}</title>
-  <meta name="description" content="{{DESCRIPTION}}" />
-  <link rel="canonical" href="{{CANONICAL_URL}}" />
 </head>
 <body>{{BODY}}</body>
 </html>`,
