@@ -90,6 +90,7 @@ await startDevServer(config, {
 
 Templates support these placeholders:
 - `{{TITLE}}` - Page title
+- `{{DESCRIPTION}}` - Page description
 - `{{BODY}}` - Rendered HTML body
 - `{{LANGUAGE_SWITCHER}}` - Language selector UI
 - `{{LANG}}` - Current page language code
@@ -141,7 +142,9 @@ twitterImage: img/page-specific-twitter.png
 **Template Placeholders Removed**: The following placeholders are no longer needed - meta tags are automatically injected:
 - `{{OG_URL}}`, `{{OG_TITLE}}`, `{{OG_DESCRIPTION}}`, `{{OG_IMAGE}}`
 - `{{TWITTER_TITLE}}`, `{{TWITTER_DESCRIPTION}}`, `{{TWITTER_IMAGE}}`
-- `{{CANONICAL_URL}}`, `{{DESCRIPTION}}`, `{{HREFLANG_LINKS}}`, `{{NOINDEX}}`, `{{META_TAGS}}`
+- `{{CANONICAL_URL}}`, `{{HREFLANG_LINKS}}`, `{{NOINDEX}}`, `{{META_TAGS}}`
+
+**Note**: `{{DESCRIPTION}}` is still available as a template placeholder for use in the body content, but the meta description tag is automatically injected in the head.
 
 **Migration**: Remove these placeholders from your templates. Ensure your template has a `</head>` tag - all meta tags will be automatically injected before it.
 

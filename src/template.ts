@@ -166,6 +166,7 @@ export async function renderTemplate(
 
   let rendered = template
     .replace(/\{\{TITLE\}\}/g, escapeHtml(meta.title))
+    .replace(/\{\{DESCRIPTION\}\}/g, escapeHtml(meta.description))
     .replace(/\{\{LANGUAGE_SWITCHER\}\}/g, languageSwitcher)
     .replace(/\{\{LANG\}\}/g, meta.lang ?? DEFAULT_LANG)
     .replace(/\{\{BACK_LINK_HREF\}\}/g, escapeHtml(meta.backLinkHref))
