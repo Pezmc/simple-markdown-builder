@@ -1,5 +1,7 @@
-import { test, expect } from 'bun:test'
-import { escapeHtml, toAbsoluteUrl, cleanUrl } from './template.js'
+import { test, expect, beforeEach, afterEach } from 'bun:test'
+import { mkdir, writeFile, rm } from 'node:fs/promises'
+import path from 'node:path'
+import { escapeHtml, toAbsoluteUrl, cleanUrl, renderTemplate } from './template.js'
 import type { PageMeta } from './config.js'
 
 test('escapeHtml - escapes special characters', () => {
@@ -23,5 +25,95 @@ test('cleanUrl - removes .html extension and normalizes index', () => {
   // cleanUrl only handles root-level index, not nested paths
   expect(cleanUrl('sub/index.html', 'https://example.com')).toBe('https://example.com/sub/index')
   expect(cleanUrl('page', 'https://example.com')).toBe('https://example.com/page')
+})
+
+const TEST_TEMPLATE_DIR = path.join(process.cwd(), '.test-template')
+
+beforeEach(async () => {
+  await rm(TEST_TEMPLATE_DIR, { recursive: true, force: true })
+  await mkdir(TEST_TEMPLATE_DIR, { recursive: true })
+})
+
+afterEach(async () => {
+  await rm(TEST_TEMPLATE_DIR, { recursive: true, force: true })
+})
+
+test('renderTemplate - generates meta tags with ogImage', async () => {
+  const templatePath = path.join(TEST_TEMPLATE_DIR, 'template.html')
+  await writeFile(
+    templatePath,
+    `<!DOCTYPE html>
+<html>
+<head>
+  <title>{{TITLE}}</title>
+  {{META_TAGS}}
+</head>
+<body>{{BODY}}</body>
+</html>`,
+  )
+
+  const meta: PageMeta = {
+    title: 'Test Page',
+    description: 'Test Description',
+    sidebarTitle: 'Test',
+    sidebarSummary: 'Test',
+    backLinkHref: '/',
+    backLinkLabel: 'Back',
+    output: 'test.html',
+    ogImage: 'img/test-og.png',
+  }
+
+  const result = await renderTemplate(
+    '<p>Body content</p>',
+    meta,
+    templatePath,
+    'https://example.com',
+  )
+
+  expect(result).toContain('<meta property="og:url" content="https://example.com/test" />')
+  expect(result).toContain('<meta property="og:title" content="Test Page" />')
+  expect(result).toContain('<meta property="og:description" content="Test Description" />')
+  expect(result).toContain('<meta property="og:image" content="https://example.com/img/test-og.png" />')
+  expect(result).toContain('<meta name="twitter:card" content="summary_large_image" />')
+  expect(result).toContain('<meta name="twitter:image" content="https://example.com/img/test-og.png" />')
+})
+
+test('renderTemplate - omits ogImage tags when not provided', async () => {
+  const templatePath = path.join(TEST_TEMPLATE_DIR, 'template.html')
+  await writeFile(
+    templatePath,
+    `<!DOCTYPE html>
+<html>
+<head>
+  <title>{{TITLE}}</title>
+  {{META_TAGS}}
+</head>
+<body>{{BODY}}</body>
+</html>`,
+  )
+
+  const meta: PageMeta = {
+    title: 'Test Page',
+    description: 'Test Description',
+    sidebarTitle: 'Test',
+    sidebarSummary: 'Test',
+    backLinkHref: '/',
+    backLinkLabel: 'Back',
+    output: 'test.html',
+  }
+
+  const result = await renderTemplate(
+    '<p>Body content</p>',
+    meta,
+    templatePath,
+    'https://example.com',
+  )
+
+  expect(result).toContain('<meta property="og:url" content="https://example.com/test" />')
+  expect(result).toContain('<meta property="og:title" content="Test Page" />')
+  expect(result).toContain('<meta property="og:description" content="Test Description" />')
+  expect(result).not.toContain('<meta property="og:image"')
+  expect(result).not.toContain('<meta name="twitter:image"')
+  // Note: console.warn will be called, but we don't mock it in bun tests
 })
 

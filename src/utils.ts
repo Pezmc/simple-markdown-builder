@@ -4,6 +4,18 @@ import type { UtmParams } from './config.js'
 
 const ZERO_WIDTH_SPACE = '&#8203;'
 
+const ANSI_RESET = '\x1b[0m'
+const ANSI_YELLOW = '\x1b[33m'
+const ANSI_RED = '\x1b[31m'
+
+export function logWarning(message: string): void {
+  console.warn(`${ANSI_YELLOW}[warning]${ANSI_RESET} ${message}`)
+}
+
+export function logError(message: string, ...args: unknown[]): void {
+  console.error(`${ANSI_RED}[error]${ANSI_RESET} ${message}`, ...args)
+}
+
 export function serializeUtmParams(utmParams: UtmParams): string {
   return Object.entries(utmParams)
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
