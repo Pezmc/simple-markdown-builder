@@ -90,12 +90,7 @@ await startDevServer(config, {
 
 Templates support these placeholders:
 - `{{TITLE}}` - Page title
-- `{{DESCRIPTION}}` - Page description
 - `{{BODY}}` - Rendered HTML body
-- `{{CANONICAL_URL}}` - Canonical URL (for use in custom meta tags)
-- `{{META_TAGS}}` - Complete meta tags block (Open Graph, Twitter Card, canonical link)
-- `{{HREFLANG_LINKS}}` - Alternate language links
-- `{{NOINDEX}}` - Robots noindex meta tag (if enabled)
 - `{{LANGUAGE_SWITCHER}}` - Language selector UI
 - `{{LANG}}` - Current page language code
 - `{{BACK_LINK_HREF}}` - Back link URL
@@ -104,13 +99,16 @@ Templates support these placeholders:
 - `{{SIDEBAR_SUMMARY}}` - Sidebar summary
 - `{{YEAR}}` - Current year
 
-### Open Graph Images
 
-The `ogImage` can be set in two ways:
-1. **Default for all pages**: Set `ogImage` in `defaultMeta` configuration
-2. **Per-page**: Set `ogImage` in the page's front-matter
+### Open Graph and Twitter Images
 
-If `ogImage` is not provided, a warning will be logged and the Open Graph image tags will be omitted from the generated HTML.
+Images can be set in two ways:
+1. **Default for all pages**: Set in `defaultMeta` configuration
+2. **Per-page**: Set in the page's front-matter
+
+**ogImage**: Used for Open Graph tags. If not provided, a warning is logged and the tag is omitted.
+
+**twitterImage**: Used for Twitter Card image. Only set if explicitly provided (no fallback to ogImage).
 
 Example:
 
@@ -121,7 +119,8 @@ await build({
   defaultMeta: {
     title: 'My Site',
     description: 'Site description',
-    ogImage: 'img/default-og.png', // Default OG image for all pages
+    ogImage: 'img/default-og.png', // Default for all pages
+    twitterImage: 'img/default-twitter.png', // Optional
     // ... other meta fields
   },
 })
@@ -133,24 +132,18 @@ Or per-page in front-matter:
 ---
 title: My Page
 ogImage: img/page-specific-og.png
+twitterImage: img/page-specific-twitter.png
 ---
 ```
 
 ### Breaking Changes in v1.0
 
-**Template Placeholders**: The following placeholders have been removed and replaced with `{{META_TAGS}}`:
-- `{{OG_URL}}`
-- `{{OG_TITLE}}`
-- `{{OG_DESCRIPTION}}`
-- `{{OG_IMAGE}}`
-- `{{TWITTER_TITLE}}`
-- `{{TWITTER_DESCRIPTION}}`
-- `{{TWITTER_IMAGE}}`
+**Template Placeholders Removed**: The following placeholders are no longer needed - meta tags are automatically injected:
+- `{{OG_URL}}`, `{{OG_TITLE}}`, `{{OG_DESCRIPTION}}`, `{{OG_IMAGE}}`
+- `{{TWITTER_TITLE}}`, `{{TWITTER_DESCRIPTION}}`, `{{TWITTER_IMAGE}}`
+- `{{CANONICAL_URL}}`, `{{DESCRIPTION}}`, `{{HREFLANG_LINKS}}`, `{{NOINDEX}}`, `{{META_TAGS}}`
 
-**Migration**: Replace these placeholders in your templates with a single `{{META_TAGS}}` placeholder. The meta tags are now automatically generated and include:
-- Canonical link
-- Open Graph tags (og:url, og:title, og:description, og:image if provided)
-- Twitter Card tags (twitter:card, twitter:title, twitter:description, twitter:image if ogImage is provided)
+**Migration**: Remove these placeholders from your templates. Ensure your template has a `</head>` tag - all meta tags will be automatically injected before it.
 
 ### UTM Parameters
 
