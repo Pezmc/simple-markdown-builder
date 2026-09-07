@@ -3,6 +3,7 @@ import { mkdir, writeFile, rm, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { buildAlternateLinks, resolveCanonicalRelative, groupByTranslation, writeSitemap } from './sitemap.js'
 import { toAbsoluteUrl } from './template.js'
+import { normalizeIndexUrl } from './utils.js'
 import type { RenderPlan } from './config.js'
 
 const TEST_DIR = path.join(process.cwd(), '.test-sitemap')
@@ -57,7 +58,7 @@ test('buildAlternateLinks - normalizes /index in path', () => {
   const alternates = buildAlternateLinks(plan, groups, baseUrl, 'en')
 
   const enLink = alternates.find((alt) => alt.lang === 'en')
-  expect(enLink?.href).toBe('https://example.com/sub')
+  expect(enLink?.href).toBe('https://example.com/sub/')
 })
 
 test('toAbsoluteUrl - normalizes index URLs in canonical', () => {
@@ -65,6 +66,15 @@ test('toAbsoluteUrl - normalizes index URLs in canonical', () => {
   const normalizedPath = ''
   const url = toAbsoluteUrl(normalizedPath, baseUrl)
   expect(url).toBe('https://ropelabs.org/')
+})
+
+// The point of the trailing slash is that no emitted URL redirects. Both
+// spellings of the root index have to land on the bare origin.
+test('toAbsoluteUrl - both root index spellings resolve to the origin', () => {
+  const baseUrl = 'https://ropelabs.org'
+  expect(toAbsoluteUrl(normalizeIndexUrl('index'), baseUrl)).toBe('https://ropelabs.org/')
+  expect(toAbsoluteUrl(normalizeIndexUrl('/index'), baseUrl)).toBe('https://ropelabs.org/')
+  expect(toAbsoluteUrl(normalizeIndexUrl('fr/index'), baseUrl)).toBe('https://ropelabs.org/fr/')
 })
 
 test('groupByTranslation - groups plans by translationOf or slug', () => {

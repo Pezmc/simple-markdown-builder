@@ -120,9 +120,12 @@ export function stripHtmlExtension(url: string): string {
 }
 
 export function normalizeIndexUrl(path: string): string {
-  // Normalize paths ending with /index or just index to empty string (base URL)
-  const normalized = path.replace(/\/index$/, '').replace(/^index$/, '')
-  return normalized
+  // A directory index is the directory, so "sub/index" normalizes to "sub/".
+  // Dropping the slash instead yields "/sub", which static hosts answer with a
+  // 301 to "/sub/" — a canonical, hreflang or sitemap entry pointing at a
+  // redirect is a self-inflicted SEO bug. The bare "index" is the site root and
+  // becomes "", which toAbsoluteUrl renders as "/".
+  return path.replace(/\/index$/, '/').replace(/^index$/, '')
 }
 
 export function slugifyAnchor(text: string): string {

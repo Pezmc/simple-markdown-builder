@@ -43,13 +43,21 @@ test('appendUtmParams - no utm params', () => {
   expect(result).toBe(html)
 })
 
-test('normalizeIndexUrl - removes /index suffix', () => {
+test('normalizeIndexUrl - a directory index normalizes to the directory', () => {
+  // Root index is the site root. Both spellings render as "/" through
+  // toAbsoluteUrl, which prefixes a slash and collapses leading ones.
   expect(normalizeIndexUrl('index')).toBe('')
-  expect(normalizeIndexUrl('/index')).toBe('')
-  expect(normalizeIndexUrl('path/index')).toBe('path')
-  expect(normalizeIndexUrl('/path/index')).toBe('/path')
+  expect(normalizeIndexUrl('/index')).toBe('/')
+  // A nested index keeps the trailing slash, so the URL does not 301.
+  expect(normalizeIndexUrl('path/index')).toBe('path/')
+  expect(normalizeIndexUrl('/path/index')).toBe('/path/')
+  expect(normalizeIndexUrl('a/b/index')).toBe('a/b/')
+  // Anything that is not an index is untouched, including a path merely
+  // containing the word.
   expect(normalizeIndexUrl('other')).toBe('other')
   expect(normalizeIndexUrl('/other')).toBe('/other')
+  expect(normalizeIndexUrl('index/page')).toBe('index/page')
+  expect(normalizeIndexUrl('reindex')).toBe('reindex')
   expect(normalizeIndexUrl('')).toBe('')
 })
 

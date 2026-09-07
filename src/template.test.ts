@@ -22,8 +22,8 @@ test('toAbsoluteUrl - converts relative path to absolute URL', () => {
 test('cleanUrl - removes .html extension and normalizes index', () => {
   expect(cleanUrl('page.html', 'https://example.com')).toBe('https://example.com/page')
   expect(cleanUrl('index.html', 'https://example.com')).toBe('https://example.com/')
-  // cleanUrl only handles root-level index, not nested paths
-  expect(cleanUrl('sub/index.html', 'https://example.com')).toBe('https://example.com/sub/index')
+  expect(cleanUrl('sub/index.html', 'https://example.com')).toBe('https://example.com/sub/')
+  expect(cleanUrl('a/b/index.html', 'https://example.com')).toBe('https://example.com/a/b/')
   expect(cleanUrl('page', 'https://example.com')).toBe('https://example.com/page')
 })
 

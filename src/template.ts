@@ -57,12 +57,7 @@ export function toAbsoluteUrl(relativePath: string, baseUrl: string): string {
 }
 
 export function cleanUrl(relativePath: string, baseUrl: string): string {
-  let cleaned = relativePath.replace(/\.html$/, '')
-  if (cleaned === 'index') {
-    cleaned = ''
-  }
-  const normalized = cleaned ? `/${cleaned}` : '/'
-  return new URL(normalized, baseUrl).toString()
+  return toAbsoluteUrl(normalizeIndexUrl(stripHtmlExtension(relativePath)), baseUrl)
 }
 
 const REQUIRED_PLACEHOLDERS = ['{{TITLE}}', '{{BODY}}']
