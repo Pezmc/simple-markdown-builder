@@ -1,5 +1,6 @@
 import path from 'node:path'
 import type { FrontMatter } from './config.js'
+import { foldAccents } from './utils.js'
 
 const FRONT_MATTER_BOUNDARY = /^---\s*$/
 
@@ -78,8 +79,7 @@ export function sanitizeSlug(value: string): string {
 
 function sanitizeSlugSegment(value: string): string {
   return (
-    value
-      .toLowerCase()
+    foldAccents(value)
       .trim()
       .replace(/\s+/g, '-')
       .replace(/[^a-z0-9-]/g, '-')

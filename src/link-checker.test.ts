@@ -47,6 +47,22 @@ test('checkLinks - passes when anchor links match IDs with different casing', as
   await checkLinks(TEST_DIR)
 })
 
+test('checkLinks - passes when an ASCII anchor targets an accented ID', async () => {
+  const htmlFile = path.join(TEST_DIR, 'index.html')
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <body>
+        <h2 id="leçons">Leçons</h2>
+        <a href="#lecons">Leçons</a>
+      </body>
+    </html>
+  `
+  await writeFile(htmlFile, html)
+
+  await checkLinks(TEST_DIR)
+})
+
 test('checkLinks - passes when internal links resolve to .html files', async () => {
   const indexFile = path.join(TEST_DIR, 'index.html')
   const targetDir = path.join(TEST_DIR, 'house-rules')

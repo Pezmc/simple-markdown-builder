@@ -1,7 +1,7 @@
 import { test, expect, beforeEach, afterEach } from 'bun:test'
 import { mkdir, writeFile, rm } from 'node:fs/promises'
 import path from 'node:path'
-import { serializeUtmParams, appendUtmParams, normalizeIndexUrl, obfuscateMailtoLinks, collectMarkdownFiles, collectHtmlFiles, extractSlugFromPath, normalizePathSeparators } from './utils.js'
+import { serializeUtmParams, appendUtmParams, normalizeIndexUrl, obfuscateMailtoLinks, collectMarkdownFiles, collectHtmlFiles, extractSlugFromPath, normalizePathSeparators, slugifyAnchor } from './utils.js'
 
 const TEST_DIR = path.join(process.cwd(), '.test-utils')
 
@@ -131,3 +131,10 @@ test('normalizePathSeparators - normalizes Windows paths to forward slashes', ()
   expect(normalizePathSeparators('path\\to\\file.html')).toBe('path/to/file.html')
 })
 
+
+test('slugifyAnchor - folds accents and ligatures to plain letters', () => {
+  expect(slugifyAnchor('Les leçons')).toBe('les-lecons')
+  expect(slugifyAnchor('Leçons particulières à Louvain')).toBe('lecons-particulieres-a-louvain')
+  expect(slugifyAnchor('Œuvre & Æther')).toBe('oeuvre-aether')
+  expect(slugifyAnchor('Søren Straße')).toBe('soren-strasse')
+})

@@ -49,6 +49,9 @@ test('sanitizeSlug', () => {
   expect(sanitizeSlug('Test--Multiple---Dashes')).toBe('test-multiple-dashes')
   expect(sanitizeSlug('Special!@#Characters')).toBe('special-characters')
   expect(sanitizeSlug('  Trimmed  ')).toBe('trimmed')
+  expect(sanitizeSlug('leçons particulières à Louvain')).toBe('lecons-particulieres-a-louvain')
+  expect(sanitizeSlug('fr/Leçons Privées')).toBe('fr/lecons-privees')
+  expect(sanitizeSlug('Cœur Straße')).toBe('coeur-strasse')
 })
 
 test('isBooleanEnabled', () => {

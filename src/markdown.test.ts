@@ -17,6 +17,13 @@ test('createMarkdownRenderer - adds anchors to h1, h2, h3', () => {
   expect(result).toContain('id="heading-3"')
 })
 
+test('createMarkdownRenderer - folds accents in anchors', () => {
+  const md = createMarkdownRenderer()
+  const result = md.render('# Les leçons\n## Où trouver nos cours ?')
+  expect(result).toContain('id="les-lecons"')
+  expect(result).toContain('id="ou-trouver-nos-cours"')
+})
+
 test('createMarkdownRenderer - with custom options', () => {
   const md = createMarkdownRenderer({ html: false })
   const result = md.render('<script>alert("xss")</script>')

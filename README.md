@@ -182,3 +182,5 @@ slug: about
 ```
 
 If the slug contains a path (e.g., `slug: shop/aerial-silks`), it will be used directly for the output path.
+
+Front-matter slugs and heading anchors fold accented letters to plain ASCII (`slug: leçons particulières` → `lecons-particulieres`, `## Les leçons` → `#les-lecons`). The ligatures æ, œ, ß and the letters ø, đ, ł fold to `ae`, `oe`, `ss`, `o`, `d`, `l`.
