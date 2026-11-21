@@ -47,6 +47,8 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
     ),
   )
 
+  assertUniqueOutputs(plans)
+
   const groups = groupByTranslation(plans)
 
   await Promise.all(
@@ -82,6 +84,21 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
 }
 
 export type { RenderPlan }
+
+// Slug sanitising folds "résumé" and "resume" to the same name; writing both
+// concurrently would let one page silently overwrite the other.
+function assertUniqueOutputs(plans: readonly RenderPlan[]): void {
+  const sources = new Map<string, string>()
+  for (const plan of plans) {
+    const existing = sources.get(plan.outputPath)
+    if (existing) {
+      throw new Error(
+        `Duplicate output ${plan.relativeOutput} from ${path.relative(process.cwd(), existing)} and ${path.relative(process.cwd(), plan.sourcePath)}`,
+      )
+    }
+    sources.set(plan.outputPath, plan.sourcePath)
+  }
+}
 
 async function createPlan(
   filePath: string,
