@@ -182,3 +182,9 @@ slug: about
 ```
 
 If the slug contains a path (e.g., `slug: shop/aerial-silks`), it will be used directly for the output path.
+
+Front-matter slugs and heading anchors fold accented letters to plain ASCII (`slug: leçons particulières` → `lecons-particulieres`, `## Les leçons` → `#les-lecons`). The ligatures æ, œ, ß and the letters ø, đ, ł fold to `ae`, `oe`, `ss`, `o`, `d`, `l`.
+
+Two pages whose slugs fold to the same name (e.g. `résumé.md` and `resume.md`) fail the build instead of overwriting each other.
+
+**Upgrading from 1.x:** accented slugs and anchors change (`le-ons` becomes `lecons`). Add redirects for renamed pages, and update hand-written `#anchor` links. Translated files store the old slug in `translationOf`, which no longer matches its source. Either run `ensureTranslations(config, contentDir, true)` once to regenerate them, or edit `translationOf` in each translated file to the new slug.

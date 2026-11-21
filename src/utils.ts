@@ -128,9 +128,27 @@ export function normalizeIndexUrl(path: string): string {
   return path.replace(/\/index$/, '/').replace(/^index$/, '')
 }
 
-export function slugifyAnchor(text: string): string {
+// NFD splits "ç" into "c" + a combining mark, which the range below strips.
+// Ligatures and stroked letters have no decomposition, so they are mapped by hand.
+const UNDECOMPOSABLE_LETTERS: Readonly<Record<string, string>> = {
+  æ: 'ae',
+  œ: 'oe',
+  ø: 'o',
+  ß: 'ss',
+  đ: 'd',
+  ł: 'l',
+}
+
+export function foldAccents(text: string): string {
   return text
     .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[æœøßđł]/g, (letter) => UNDECOMPOSABLE_LETTERS[letter] ?? letter)
+}
+
+export function slugifyAnchor(text: string): string {
+  return foldAccents(text)
     .trim()
     .replace(/[^\w\s-]/g, '')
     .replace(/[\s_-]+/g, '-')

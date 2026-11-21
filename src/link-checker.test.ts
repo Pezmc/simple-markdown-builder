@@ -2,6 +2,7 @@ import { test, expect, beforeEach, afterEach } from 'bun:test'
 import { mkdir, writeFile, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { checkLinks } from './link-checker.js'
+import { createMarkdownRenderer } from './markdown.js'
 
 const TEST_DIR = path.join(process.cwd(), '.test-link-checker')
 
@@ -43,6 +44,15 @@ test('checkLinks - passes when anchor links match IDs with different casing', as
     </html>
   `
   await writeFile(htmlFile, html)
+
+  await checkLinks(TEST_DIR)
+})
+
+test('checkLinks - passes when an ASCII anchor targets a rendered accented heading', async () => {
+  const htmlFile = path.join(TEST_DIR, 'index.html')
+  const body = createMarkdownRenderer().render('## Leçons\n\n[Leçons](#lecons)')
+  expect(body).toContain('id="lecons"')
+  await writeFile(htmlFile, `<!DOCTYPE html><html><body>${body}</body></html>`)
 
   await checkLinks(TEST_DIR)
 })

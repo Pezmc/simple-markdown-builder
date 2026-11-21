@@ -300,3 +300,29 @@ Content here
   expect(exists).toBe(true)
 })
 
+
+test('build - rejects two pages whose slugs fold to the same output', async () => {
+  const contentDir = path.join(TEST_DIR, 'content')
+  const templatePath = path.join(TEST_DIR, 'template.html')
+  await mkdir(contentDir, { recursive: true })
+  await writeFile(path.join(contentDir, 'résumé.md'), '# Résumé')
+  await writeFile(path.join(contentDir, 'resume.md'), '# Resume')
+  await writeFile(templatePath, '<html><body>{{BODY}}</body></html>')
+
+  await expect(
+    build({
+      contentDir,
+      outputDir: path.join(TEST_DIR, 'docs'),
+      templatePath,
+      baseUrl: 'https://example.com',
+      defaultMeta: {
+        title: 'Test Site',
+        description: 'Test',
+        sidebarTitle: 'Test',
+        sidebarSummary: 'Test',
+        backLinkHref: '/',
+        backLinkLabel: 'Back',
+      },
+    }),
+  ).rejects.toThrow('Duplicate output resume.html')
+})
