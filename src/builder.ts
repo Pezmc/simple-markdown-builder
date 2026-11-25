@@ -54,7 +54,9 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
   await Promise.all(
     plans.map(async (plan) => {
       await mkdir(path.dirname(plan.outputPath), { recursive: true })
-      const isHomepage = plan.relativeOutput === 'index.html'
+      const isHomepage =
+        plan.relativeOutput === 'index.html' ||
+        supportedLangs.some((lang) => plan.relativeOutput === `${lang}/index.html`)
       const alternates = buildAlternateLinks(plan, groups, config.baseUrl, defaultLang)
       const canonicalRelative = resolveCanonicalRelative(plan, groups)
       const rendered = await renderTemplate(
@@ -67,10 +69,15 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
         alternates,
         canonicalRelative,
       )
-      await writeFile(plan.outputPath, rendered)
+      const html = config.onPageRendered
+        ? await config.onPageRendered(rendered, plan, { plans, groups })
+        : rendered
+      await writeFile(plan.outputPath, html)
       console.log(`Generated ${path.relative(process.cwd(), plan.outputPath)}`)
     }),
   )
+
+  await config.onPagesWritten?.(plans, outputDir)
 
   // Generate sitemap
   await writeSitemap(plans, outputDir, config.baseUrl, defaultLang, groups)

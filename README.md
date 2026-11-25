@@ -86,6 +86,30 @@ await startDevServer(config, {
 - `noreferrer` - Add `noreferrer` to the `rel` of external links (default: `false`, emits `rel="noopener"` so destinations still see your origin as the referrer). Only applies when `utmParams` is set, since external links are rewritten by the UTM pass
 - `skipLinkCheck` - Whether to skip link validation
 - `clean` - Clean HTML files from output directory before building (default: `false`)
+- `onPageRendered` - Optional hook to rewrite each page's HTML before it is written (see below)
+- `onPagesWritten` - Optional hook that runs once every page is written, before the link check (see below)
+
+### Build Hooks
+
+`onPageRendered(html, plan, { plans, groups })` receives each page's rendered HTML and returns the HTML to write. `plans` is every page in the build and `groups` maps each translation group key (`translationOf`, else `slug`) to its pages, so the hook can add cross-page navigation. Pages render concurrently, so the hook must not depend on the order it is called in.
+
+`onPagesWritten(plans, outputDir)` runs after every page is written and before the link check, even when `skipLinkCheck` is set. Write extra files here, such as redirect stubs that the rewritten pages link to. Files written here are link-checked but stay out of the sitemap, which is built from `plans`.
+
+Both hooks may be async. `startDevServer` calls `build()`, so watch mode runs them on every rebuild.
+
+```typescript
+await build({
+  ...config,
+  onPageRendered: (html, plan, { groups }) => html.replace('</main>', `${renderNav(plan, groups)}</main>`),
+  onPagesWritten: async (plans, outputDir) => {
+    await writeFile(path.join(outputDir, 'fr', 'house-rules.html'), redirectTo('/house-rules'))
+  },
+})
+```
+
+Custom front-matter keys pass through onto `plan.meta` (`eyebrow: Welcome` is `plan.meta.eyebrow`). Their values are strings.
+
+The builder's own slug helpers are exported, so a hook can map outputs back to sources with the same rules: `sanitizeSlug`, `foldAccents` and `slugifyAnchor` (the heading-anchor slugifier).
 
 ### Template Placeholders
 
@@ -93,7 +117,7 @@ Templates support these placeholders:
 - `{{TITLE}}` - Page title
 - `{{DESCRIPTION}}` - Page description
 - `{{BODY}}` - Rendered HTML body
-- `{{LANGUAGE_SWITCHER}}` - Language selector UI
+- `{{LANGUAGE_SWITCHER}}` - Language switcher (see below)
 - `{{LANG}}` - Current page language code
 - `{{BACK_LINK_HREF}}` - Back link URL
 - `{{BACK_LINK_LABEL}}` - Back link text
@@ -101,6 +125,15 @@ Templates support these placeholders:
 - `{{SIDEBAR_SUMMARY}}` - Sidebar summary
 - `{{YEAR}}` - Current year
 
+`{{LANGUAGE_SWITCHER}}` renders only when a page has more than one language. It carries no styling, only class names to style:
+
+```html
+<nav class="smb-lang-switch" aria-label="Language"><a href="/about" hreflang="en" class="smb-lang-switch__item">EN</a><span class="smb-lang-switch__item is-active" aria-current="page">FR</span></nav>
+```
+
+### Homepages
+
+`homepageTemplatePath` applies to `index.html` and to each language's index (`fr/index.html`, `nl/index.html`) for every language in `supportedLangs`. Other `index.html` files, such as `guides/index.html`, use the normal template.
 
 ### Open Graph and Twitter Images
 
@@ -182,10 +215,32 @@ slug: about
 ---
 ```
 
-If the slug contains a path (e.g., `slug: shop/aerial-silks`), it will be used directly for the output path.
+If the slug contains a path (e.g., `slug: shop/aerial-silks`), it will be used directly for the output path. That path replaces the source directory, language directory included: `fr/silks.md` with `slug: shop/aerial-silks` also writes `shop/aerial-silks.html`, so it collides with the English page and fails the build. Empty path segments are dropped (`a//b` becomes `a/b`).
 
 Front-matter slugs and heading anchors fold accented letters to plain ASCII (`slug: leçons particulières` → `lecons-particulieres`, `## Les leçons` → `#les-lecons`). The ligatures æ, œ, ß and the letters ø, đ, ł fold to `ae`, `oe`, `ss`, `o`, `d`, `l`.
 
 Two pages whose slugs fold to the same name (e.g. `résumé.md` and `resume.md`) fail the build instead of overwriting each other.
 
 **Upgrading from 1.x:** accented slugs and anchors change (`le-ons` becomes `lecons`). Add redirects for renamed pages, and update hand-written `#anchor` links. Translated files store the old slug in `translationOf`, which no longer matches its source. Either run `ensureTranslations(config, contentDir, true)` once to regenerate them, or edit `translationOf` in each translated file to the new slug.
+
+### Breaking Changes in v3.0
+
+**Language switcher markup**: `{{LANGUAGE_SWITCHER}}` no longer emits Tailwind utilities or the `brand`/`slate` colours, and is now a `<nav>` landmark.
+
+Before:
+
+```html
+<div class="mb-6 flex flex-wrap items-center gap-2" aria-label="Language selector"><span class="inline-flex items-center rounded-full bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">EN</span><span class="text-slate-400">·</span><a href="/fr/about" class="inline-flex items-center rounded-full border border-brand/30 px-3 py-1 text-xs font-semibold text-brand hover:bg-brand/10">FR</a></div>
+```
+
+After:
+
+```html
+<nav class="smb-lang-switch" aria-label="Language"><span class="smb-lang-switch__item is-active" aria-current="page">EN</span><a href="/fr/about" hreflang="fr" class="smb-lang-switch__item">FR</a></nav>
+```
+
+**Migration**: style `.smb-lang-switch`, `.smb-lang-switch__item` and `.smb-lang-switch__item.is-active` in your own CSS, and update anything that matched the old `aria-label="Language selector"`. The `·` separator is gone; add one with CSS if you want it.
+
+**Language homepages**: with `homepageTemplatePath` set, `fr/index.html` and other language indexes now use the homepage template instead of the normal one.
+
+**Also new** (not breaking): the `onPageRendered` and `onPagesWritten` hooks, the `sanitizeSlug`, `foldAccents` and `slugifyAnchor` exports, the `PageRenderContext` and `KnownPageMeta` types, and custom front-matter keys typed on `PageMeta`.

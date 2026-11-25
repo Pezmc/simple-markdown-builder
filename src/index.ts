@@ -5,12 +5,14 @@ export { checkLinks } from './link-checker.js'
 export { writeSitemap, buildAlternateLinks, resolveCanonicalRelative } from './sitemap.js'
 export { ensureTranslations } from './translations.js'
 export { getDefaultLang, getSupportedLangs } from './config.js'
-export { inferLangFromPath } from './frontmatter.js'
-export { extractSlugFromPath, normalizePathSeparators } from './utils.js'
+export { inferLangFromPath, sanitizeSlug } from './frontmatter.js'
+export { extractSlugFromPath, normalizePathSeparators, foldAccents, slugifyAnchor } from './utils.js'
 export type {
   BuilderConfig,
   FrontMatter,
+  KnownPageMeta,
   PageMeta,
+  PageRenderContext,
   TranslationConfig,
   UtmParams,
 } from './config.js'

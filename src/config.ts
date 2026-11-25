@@ -17,7 +17,9 @@ export interface FrontMatter {
   readonly twitterImage?: string
 }
 
-export interface PageMeta {
+// The keys the builder itself reads. `defaultMeta` is typed from this closed
+// shape because `Omit` over an index signature would drop every named key.
+export interface KnownPageMeta {
   readonly title: string
   readonly description: string
   readonly sidebarTitle: string
@@ -32,6 +34,11 @@ export interface PageMeta {
   readonly noindex?: string | boolean
   readonly ogImage?: string
   readonly twitterImage?: string
+}
+
+// Front-matter keys the builder does not know pass through onto `meta` as-is.
+export interface PageMeta extends KnownPageMeta {
+  readonly [key: string]: string | boolean | undefined
 }
 
 export interface RenderPlan {
@@ -75,11 +82,16 @@ export interface TranslationConfig {
   readonly supportedLangs?: readonly string[]
 }
 
+export interface PageRenderContext {
+  readonly plans: readonly RenderPlan[]
+  readonly groups: ReadonlyMap<string, readonly RenderPlan[]>
+}
+
 export interface BuilderConfig {
   readonly contentDir?: string
   readonly outputDir?: string
   readonly baseUrl: string
-  readonly defaultMeta: Omit<PageMeta, 'slug' | 'output' | 'lang' | 'translationOf' | 'translate' | 'noindex'>
+  readonly defaultMeta: Omit<KnownPageMeta, 'slug' | 'output' | 'lang' | 'translationOf' | 'translate' | 'noindex'>
   readonly templatePath: string
   readonly homepageTemplatePath?: string
   readonly markdownOptions?: MarkdownItOptions
@@ -88,6 +100,15 @@ export interface BuilderConfig {
   readonly noreferrer?: boolean
   readonly skipLinkCheck?: boolean
   readonly clean?: boolean
+  readonly onPageRendered?: (
+    html: string,
+    plan: RenderPlan,
+    context: PageRenderContext,
+  ) => string | Promise<string>
+  readonly onPagesWritten?: (
+    plans: readonly RenderPlan[],
+    outputDir: string,
+  ) => void | Promise<void>
 }
 
 export function getDefaultLang(config: BuilderConfig): string {

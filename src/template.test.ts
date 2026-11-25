@@ -186,3 +186,34 @@ test('renderTemplate - omits ogImage and twitterImage tags when not provided', a
   // Note: console.warn will be called, but we don't mock it in bun tests
 })
 
+test('renderTemplate - renders the language switcher as a nav landmark with semantic classes', async () => {
+  const templatePath = path.join(TEST_TEMPLATE_DIR, 'switcher-template.html')
+  await writeFile(
+    templatePath,
+    '<html><head><title>{{TITLE}}</title></head><body>{{LANGUAGE_SWITCHER}}{{BODY}}</body></html>',
+  )
+
+  const meta: PageMeta = {
+    title: 'À propos',
+    description: 'Test',
+    sidebarTitle: 'Test',
+    sidebarSummary: 'Test',
+    backLinkHref: '/',
+    backLinkLabel: 'Back',
+    output: 'fr/about.html',
+    lang: 'fr',
+  }
+
+  const result = await renderTemplate('<p>Body</p>', meta, templatePath, 'https://example.com', false, undefined, [
+    { lang: 'en', href: 'https://example.com/about' },
+    { lang: 'fr', href: 'https://example.com/fr/about' },
+    { lang: 'x-default', href: 'https://example.com/about' },
+  ])
+
+  expect(result).toContain(
+    '<nav class="smb-lang-switch" aria-label="Language">' +
+      '<a href="/about" hreflang="en" class="smb-lang-switch__item">EN</a>' +
+      '<span class="smb-lang-switch__item is-active" aria-current="page">FR</span>' +
+      '</nav>',
+  )
+})
