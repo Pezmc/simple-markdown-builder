@@ -197,18 +197,17 @@ function renderLanguageSwitcher(
     return ''
   }
 
-  const pills = available
+  const items = available
     .map((alt) => {
-      const isActive = alt.lang === currentLang
       const label = alt.lang.toUpperCase()
-      const href = new URL(alt.href).pathname
-      if (isActive) {
-        return `<span class="inline-flex items-center rounded-full bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">${label}</span>`
+      if (alt.lang === currentLang) {
+        return `<span class="smb-lang-switch__item is-active" aria-current="page">${label}</span>`
       }
-      return `<a href="${href}" class="inline-flex items-center rounded-full border border-brand/30 px-3 py-1 text-xs font-semibold text-brand hover:bg-brand/10">${label}</a>`
+      const href = new URL(alt.href).pathname
+      return `<a href="${href}" hreflang="${alt.lang}" class="smb-lang-switch__item">${label}</a>`
     })
-    .join('<span class="text-slate-400">·</span>')
+    .join('')
 
-  return `<div class="mb-6 flex flex-wrap items-center gap-2" aria-label="Language selector">${pills}</div>`
+  return `<nav class="smb-lang-switch" aria-label="Language">${items}</nav>`
 }
 
