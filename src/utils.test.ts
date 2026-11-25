@@ -37,6 +37,57 @@ test('appendUtmParams - internal link', () => {
   expect(result).not.toContain('utm_campaign')
 })
 
+const UTM = { utm_campaign: 'c', utm_source: 's' }
+const hrefOf = (html: string) => html.match(/href="([^"]+)"/)?.[1]
+
+test('appendUtmParams - fragment without query', () => {
+  const html = '<a href="https://example.com/page#section">Link</a>'
+  const result = appendUtmParams(html, UTM, 'https://mysite.com')
+  expect(hrefOf(result)).toBe('https://example.com/page?utm_campaign=c&amp;utm_source=s#section')
+})
+
+test('appendUtmParams - query and fragment', () => {
+  const html =
+    '<a href="https://map.why2025.org/?building=13&amp;building_table=buildings#maphash=19/52.69/4.74/-20">Link</a>'
+  const result = appendUtmParams(html, UTM, 'https://mysite.com')
+  expect(hrefOf(result)).toBe(
+    'https://map.why2025.org/?building=13&amp;building_table=buildings&amp;utm_campaign=c&amp;utm_source=s#maphash=19/52.69/4.74/-20',
+  )
+})
+
+test('appendUtmParams - fragment containing ? and & leaves the fragment intact', () => {
+  const html =
+    '<a href="https://map.why2025.org/#17.97/52.69/4.74&amp;maphash=19.82/52.69/4.74/-20?x=1">Link</a>'
+  const result = appendUtmParams(html, UTM, 'https://mysite.com')
+  expect(hrefOf(result)).toBe(
+    'https://map.why2025.org/?utm_campaign=c&amp;utm_source=s#17.97/52.69/4.74&amp;maphash=19.82/52.69/4.74/-20?x=1',
+  )
+})
+
+test('appendUtmParams - fragment URL already carrying utm_campaign is untouched', () => {
+  const html = '<a href="https://example.com/?utm_campaign=other#section">Link</a>'
+  const result = appendUtmParams(html, UTM, 'https://mysite.com')
+  expect(hrefOf(result)).toBe('https://example.com/?utm_campaign=other#section')
+})
+
+test('appendUtmParams - external links get rel="noopener" by default', () => {
+  const html = '<a href="https://example.com">Link</a>'
+  const result = appendUtmParams(html, UTM, 'https://mysite.com')
+  expect(result).toContain(' target="_blank" rel="noopener">')
+})
+
+test('appendUtmParams - noreferrer opt-in adds it to rel', () => {
+  const html = '<a href="https://example.com">Link</a>'
+  const result = appendUtmParams(html, UTM, 'https://mysite.com', true)
+  expect(result).toContain(' target="_blank" rel="noopener noreferrer">')
+})
+
+test('appendUtmParams - internal links get no target or rel', () => {
+  const html = '<a href="https://mysite.com/page">Link</a>'
+  const result = appendUtmParams(html, UTM, 'https://mysite.com', true)
+  expect(result).toBe(html)
+})
+
 test('appendUtmParams - no utm params', () => {
   const html = '<a href="https://example.com">Link</a>'
   const result = appendUtmParams(html, undefined, 'https://mysite.com')

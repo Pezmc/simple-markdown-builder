@@ -83,6 +83,7 @@ await startDevServer(config, {
 - `markdownOptions` - MarkdownIt configuration options
 - `translations` - Translation config: `false` to disable, or object with DeepL settings
 - `utmParams` - UTM parameters object for external links
+- `noreferrer` - Add `noreferrer` to the `rel` of external links (default: `false`, emits `rel="noopener"` so destinations still see your origin as the referrer)
 - `skipLinkCheck` - Whether to skip link validation
 - `clean` - Clean HTML files from output directory before building (default: `false`)
 
@@ -162,7 +163,7 @@ UTM parameters are provided as an object:
 }
 ```
 
-These are automatically appended to external links.
+These are automatically inserted into external links, before any `#fragment`. External links also get `target="_blank" rel="noopener"`; set `noreferrer: true` to emit `rel="noopener noreferrer"` instead.
 
 ### Slugs and File Paths
 
