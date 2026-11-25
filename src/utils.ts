@@ -26,6 +26,7 @@ export function appendUtmParams(
   html: string,
   utmParams: UtmParams | undefined,
   baseUrl: string,
+  noreferrer = false,
 ): string {
   if (!utmParams) {
     return html
@@ -45,14 +46,17 @@ export function appendUtmParams(
 
     const isInternal = host.endsWith(baseHost)
     const needsUtm = !decoded.includes('utm_campaign=') && !isInternal
+    // Query params must sit before the #fragment, or the destination never sees them.
+    const hashIndex = decoded.indexOf('#')
+    const base = hashIndex === -1 ? decoded : decoded.slice(0, hashIndex)
+    const fragment = hashIndex === -1 ? '' : decoded.slice(hashIndex)
     const updated = needsUtm
-      ? `${decoded}${decoded.includes('?') ? '&' : '?'}${utmString}`
+      ? `${base}${base.includes('?') ? '&' : '?'}${utmString}${fragment}`
       : decoded
 
     const escaped = updated.replace(/&/g, '&amp;')
-    const externalAttrs = isInternal
-      ? ''
-      : ' target="_blank" rel="noopener noreferrer"'
+    const rel = noreferrer ? 'noopener noreferrer' : 'noopener'
+    const externalAttrs = isInternal ? '' : ` target="_blank" rel="${rel}"`
     return `href="${escaped}"${externalAttrs}`
   })
 }

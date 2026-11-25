@@ -85,6 +85,7 @@ export interface BuilderConfig {
   readonly markdownOptions?: MarkdownItOptions
   readonly translations?: false | TranslationConfig
   readonly utmParams?: UtmParams
+  readonly noreferrer?: boolean
   readonly skipLinkCheck?: boolean
   readonly clean?: boolean
 }

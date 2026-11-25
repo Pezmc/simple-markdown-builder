@@ -146,7 +146,7 @@ async function createPlan(
 
   let html = md.render(body)
   html = obfuscateMailtoLinks(html)
-  html = appendUtmParams(html, config.utmParams, config.baseUrl)
+  html = appendUtmParams(html, config.utmParams, config.baseUrl, config.noreferrer)
 
   return {
     sourcePath,
