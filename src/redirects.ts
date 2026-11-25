@@ -6,7 +6,6 @@ import { cleanUrl, escapeHtml } from './template.js'
 import { normalizeIndexUrl, stripHtmlExtension } from './utils.js'
 
 export interface RedirectStub {
-  readonly relativeOutput: string
   readonly outputPath: string
   readonly canonical: string
   readonly info: RedirectInfo
@@ -67,7 +66,6 @@ export function planRedirectStubs(
       )
     }
     stubs.set(relativeOutput, {
-      relativeOutput,
       outputPath: path.join(outputDir, ...relativeOutput.split('/')),
       canonical,
       info: { from, to, lang, reason },
@@ -81,12 +79,14 @@ export function planRedirectStubs(
       ? firstSegment
       : defaultLang
 
-    if (ABSOLUTE_URL.test(to) || to.startsWith('//')) {
+    if (/^https?:\/\//i.test(to)) {
       add(relativeOutput, to, to, lang, 'moved')
       continue
     }
-    if (!to.startsWith('/')) {
-      throw new Error(`Redirect to "${to}" must be a site path starting with / or an absolute URL`)
+    // Protocol-relative and other-scheme targets are refused: the link checker
+    // would read "//host" as a local path, and "javascript:" has no place in a link.
+    if (!to.startsWith('/') || to.startsWith('//')) {
+      throw new Error(`Redirect to "${to}" must be a site path starting with / or an http(s) URL`)
     }
     const target = resolveTarget(to, pages)
     if (!target) {
@@ -97,12 +97,17 @@ export function planRedirectStubs(
 
   if (config.translationFallback === 'redirect') {
     for (const group of groupByTranslation([...plans]).values()) {
-      const langs = new Set(group.map((plan) => plan.meta.lang))
-      // One stub per default-language page: a slug-keyed group can hold two
-      // (index.md and guides/index.md), and each needs its own fallback.
-      for (const plan of group.filter((entry) => entry.meta.lang === defaultLang)) {
+      const defaults = group.filter((entry) => entry.meta.lang === defaultLang)
+      for (const plan of defaults) {
         for (const lang of supportedLangs) {
-          if (langs.has(lang)) {
+          const inLang = group.filter((entry) => entry.meta.lang === lang)
+          // A slug-keyed group can hold several default-language pages
+          // (index.md and guides/index.md). Then only a page at the mirrored
+          // path shows which of them is translated.
+          const translated = defaults.length === 1
+            ? inLang.length > 0
+            : inLang.some((entry) => entry.relativeOutput === `${lang}/${plan.relativeOutput}`)
+          if (translated) {
             continue
           }
           add(

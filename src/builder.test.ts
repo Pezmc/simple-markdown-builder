@@ -886,3 +886,25 @@ test('build - linkCheck.translationSiblings fails a template without the languag
   )
   await build(config)
 })
+
+test('build - rejects protocol-relative and non-http redirect targets', async () => {
+  for (const to of ['//shop.example.com', 'javascript:alert(1)', 'about']) {
+    const config = await redirectSite({ 'about.md': '# About' }, { redirects: [{ from: '/old', to }] })
+    await expect(build(config)).rejects.toThrow(`Redirect to "${to}" must be a site path starting with / or an http(s) URL`)
+  }
+})
+
+test('build - translationFallback decides per page when default-language pages share a slug', async () => {
+  const config = await redirectSite(
+    { 'index.md': '# Home', 'guides/index.md': '# Guides', 'fr/index.md': '# Accueil' },
+    {
+      translations: { ...TRANSLATIONS, supportedLangs: ['en', 'fr'] },
+      translationFallback: 'redirect',
+    },
+  )
+  await build(config)
+
+  const docs = path.join(TEST_DIR, 'docs')
+  expect(await readFile(path.join(docs, 'fr', 'index.html'), 'utf-8')).toContain('Accueil')
+  expect(await readFile(path.join(docs, 'fr', 'guides', 'index.html'), 'utf-8')).toContain('url=/guides/')
+})

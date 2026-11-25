@@ -92,23 +92,40 @@ function extractHrefs(html: string): string[] {
   return matches.map((match) => match.slice(6, -1))
 }
 
+// A srcset URL may itself contain commas (data: URLs), so candidates are split
+// the way browsers do: a URL runs to the next whitespace, and a comma ends a
+// candidate only after its URL or descriptors.
+function srcsetUrls(srcset: string): string[] {
+  const urls: string[] = []
+  let expectUrl = true
+  for (const token of srcset.trim().split(/\s+/)) {
+    const url: string = expectUrl ? token : token.slice(token.indexOf(',') + 1)
+    if (!expectUrl && !token.includes(',')) {
+      continue
+    }
+    if (url) {
+      urls.push(url.replace(/,+$/, ''))
+    }
+    expectUrl = !url || url.endsWith(',')
+  }
+  return urls
+}
+
 // The leading whitespace keeps lazy-loading `data-src`/`data-srcset` out: they
 // often hold placeholders the page swaps in with script.
 function extractAssetUrls(html: string): string[] {
   const urls: string[] = []
-  for (const match of html.matchAll(/\ssrc="([^"]*)"/g)) {
-    urls.push(match[1] ?? '')
-  }
-  for (const match of html.matchAll(/\ssrcset="([^"]*)"/g)) {
-    for (const candidate of (match[1] ?? '').split(',')) {
-      urls.push(candidate.trim().split(/\s+/)[0] ?? '')
-    }
+  for (const match of html.matchAll(/\s(src|srcset)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
+    const value = match[2] ?? match[3] ?? ''
+    urls.push(...(match[1]?.toLowerCase() === 'srcset' ? srcsetUrls(value) : [value]))
   }
   return urls.filter(Boolean)
 }
 
 function extractAnchorHrefs(html: string): string[] {
-  return [...html.matchAll(/<a\s(?:[^>]*\s)?href="([^"]+)"/g)].map((match) => match[1] ?? '')
+  return [...html.matchAll(/<a\s(?:[^>]*\s)?href\s*=\s*(?:"([^"]+)"|'([^']+)')/gi)].map(
+    (match) => match[1] ?? match[2] ?? '',
+  )
 }
 
 export interface CheckLinksOptions {

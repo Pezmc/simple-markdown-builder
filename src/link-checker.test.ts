@@ -372,3 +372,42 @@ test('checkLinks - a bare relative src on a nested page resolves next to the pag
   expect(message).toContain('- missing.png from ')
   expect(message).not.toContain('diagram.png')
 })
+
+test('checkLinks - keeps commas inside srcset URLs and splits candidates with or without spaces', async () => {
+  await mkdir(path.join(TEST_DIR, 'img'), { recursive: true })
+  await writeFile(path.join(TEST_DIR, 'img', 'a.webp'), '')
+  await writeFile(
+    path.join(TEST_DIR, 'index.html'),
+    [
+      '<img srcset="data:image/svg+xml,%3Csvg%3E 1x" alt="">',
+      '<img srcset="data:image/gif;base64,R0lGOD, /img/a.webp 2x" alt="">',
+    ].join('\n'),
+  )
+  await checkLinks(TEST_DIR)
+
+  await writeFile(path.join(TEST_DIR, 'index.html'), '<img srcset="/img/a.webp 1x,/img/gone.webp 2x" alt="">')
+  const message = await expectFailure(checkLinks(TEST_DIR))
+  expect(message).toContain('- /img/gone.webp from ')
+})
+
+test('checkLinks - checks single-quoted and upper-case src and srcset', async () => {
+  await writeFile(
+    path.join(TEST_DIR, 'index.html'),
+    `<img src='/img/single.png' alt=""><IMG SRC="/img/upper.png" alt=""><source srcset='/img/set.webp 2x'>`,
+  )
+  const message = await expectFailure(checkLinks(TEST_DIR))
+  expect(message).toContain('- /img/single.png from ')
+  expect(message).toContain('- /img/upper.png from ')
+  expect(message).toContain('- /img/set.webp from ')
+})
+
+test('checkLinks - translationSiblings accepts single-quoted and upper-case anchors', async () => {
+  await mkdir(path.join(TEST_DIR, 'fr'), { recursive: true })
+  await writeFile(path.join(TEST_DIR, 'about.html'), `<a href='/fr/about'>FR</a>`)
+  await writeFile(path.join(TEST_DIR, 'fr', 'about.html'), '<A HREF="/about">EN</A>')
+
+  await checkLinks(TEST_DIR, {
+    linkCheck: { translationSiblings: true },
+    translationGroups: new Map([['about', translatedPair()]]),
+  })
+})

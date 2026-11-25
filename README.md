@@ -173,9 +173,9 @@ await build({
 })
 ```
 
-Each stub is written to `<from>.html` (`/guides/` writes `guides/index.html`) and carries a `<meta http-equiv="refresh">` to `to`, a `rel="canonical"` with the target's absolute URL, `<meta name="robots" content="noindex, follow">` and a visible link. `to` is a site path starting with `/` or an absolute URL.
+Each stub is written to `<from>.html` (`/guides/` writes `guides/index.html`) and carries a `<meta http-equiv="refresh">` to `to`, a `rel="canonical"` with the target's absolute URL, `<meta name="robots" content="noindex, follow">` and a visible link. `to` is a site path starting with `/` or an `http(s)://` URL.
 
-`translationFallback: 'redirect'` writes a stub for every page that has no translation in one of `supportedLangs`. With `about.md` and no `nl/about.md`, `nl/about.html` redirects to `/about`, so a language switcher or nav that always links `/nl/...` never 404s. A translation in another language does not stop it: each missing language gets its own stub.
+`translationFallback: 'redirect'` writes a stub for every default-language page that has no translation in one of `supportedLangs`. With `about.md` and no `nl/about.md`, `nl/about.html` redirects to `/about`, so a language switcher or nav that always links `/nl/...` never 404s. A translation in another language does not stop it: each missing language gets its own stub. Pages with no default-language version get no fallback, since there is nothing to redirect to. When several default-language pages share a slug (`index.md` and `guides/index.md`), a page counts as translated only if the translation sits at the mirrored path (`fr/guides/index.html`).
 
 The build fails, before any page is written, when:
 
@@ -204,7 +204,7 @@ A custom stub must carry its own refresh, canonical and robots tags.
 After the build, every generated HTML file in `outputDir` is checked (skip all of it with `skipLinkCheck: true`):
 
 - **Links** (always on): every `href="..."` that is not external, `mailto:`, `tel:`, `javascript:` or `data:` must resolve to a file, as is, with `.html`, or as `index.html`. A `#fragment`, on the same page or another, must match an `id` on the target page.
-- **Assets** (`linkCheck.assets`, default on): every local `src` and `srcset` URL (images, scripts, `<source>`) must resolve to a file. A bare relative URL may sit next to the page or at the site root. URLs with a scheme (`https:`, `data:`, `blob:`, `about:`) and protocol-relative URLs are skipped, as are `data-src` and `data-srcset`.
+- **Assets** (`linkCheck.assets`, default on): every local `src` and `srcset` URL, single- or double-quoted, (images, scripts, `<source>`) must resolve to a file. A bare relative URL may sit next to the page or at the site root. URLs with a scheme (`https:`, `data:`, `blob:`, `about:`) and protocol-relative URLs are skipped, as are `data-src` and `data-srcset`.
 - **Translation siblings** (`linkCheck.translationSiblings`, default off): every page whose translation group has other languages must link to one page in each of them with an `<a href>`. The hreflang `<link>` tags in the head do not count. This catches a template that dropped `{{LANGUAGE_SWITCHER}}`. Absolute links on `baseUrl` count as internal here.
 
 ```typescript
