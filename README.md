@@ -14,12 +14,15 @@ bun add simple-markdown-builder
 
 ## Usage
 
-### Basic Setup
+### CLI
+
+Put the site config in `smb.config.ts` at the project root:
 
 ```typescript
-import { build } from 'simple-markdown-builder'
+import path from 'node:path'
+import { defineConfig } from 'simple-markdown-builder'
 
-await build({
+export default defineConfig({
   baseUrl: 'https://aerialyoga.example.com',
   templatePath: 'scripts/template.html',
   defaultMeta: {
@@ -31,6 +34,42 @@ await build({
     backLinkLabel: 'Back to home',
   },
 })
+```
+
+Then build or serve it:
+
+```bash
+bunx smb build                    # build once into outputDir (default: docs)
+bunx smb build --clean            # remove generated HTML first
+bunx smb build --skip-link-check  # skip the broken-link check
+bunx smb dev                      # build, watch and serve on $PORT, else 4173
+bunx smb dev --port 3000 --clean
+bunx smb build --config site.config.ts
+bunx smb --help
+```
+
+The CLI runs on Bun and loads the config's default export with `import()`, so the config can import helpers and set the build hooks below. Relative paths in it (`contentDir`, `outputDir`, `templatePath`, …) resolve against the working directory, not the config file. `--clean` and `--skip-link-check` only switch behaviour on: they never turn off `clean` or `skipLinkCheck` set in the config.
+
+Typical `package.json` scripts:
+
+```json
+{
+  "scripts": {
+    "dev": "smb dev",
+    "build:pages": "smb build"
+  }
+}
+```
+
+### Programmatic API
+
+The CLI is a thin wrapper over `build` and `startDevServer`, which stay exported for custom scripts.
+
+```typescript
+import { build } from 'simple-markdown-builder'
+import config from './smb.config.ts'
+
+await build(config)
 ```
 
 ### With Translations
@@ -244,3 +283,63 @@ After:
 **Language homepages**: with `homepageTemplatePath` set, `fr/index.html` and other language indexes now use the homepage template instead of the normal one.
 
 **Also new** (not breaking): the `onPageRendered` and `onPagesWritten` hooks, the `sanitizeSlug`, `foldAccents` and `slugifyAnchor` exports, the `PageRenderContext` and `KnownPageMeta` types, and custom front-matter keys typed on `PageMeta`.
+
+## Deploying to GitHub Pages
+
+This repo ships a reusable workflow that installs dependencies, runs your tests, builds the site and deploys it to GitHub Pages. A site's whole deploy workflow is the caller below. The site must depend on `simple-markdown-builder` `^3.1.0` so `bunx smb` finds the local bin; without it, `bunx` falls back to the unrelated `smb` package on npm (a security placeholder) and the build fails. The repo is public, so callers need no Actions access setting.
+
+Triggers, `permissions` and `concurrency` are not inherited by a called workflow, so they stay in the caller. Reference the workflow by a release tag (`v3.1.0` is the first release with the CLI and this workflow), not `@main`, so a change here can't break a site's deploy until it bumps the tag.
+
+```yaml
+# .github/workflows/pages.yml
+name: Build and Deploy Pages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'content/**'
+      - 'docs/**'
+      - 'scripts/**'
+      - 'smb.config.ts'
+      - 'package.json'
+      - 'bun.lock'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: true
+
+jobs:
+  pages:
+    uses: Pezmc/simple-markdown-builder/.github/workflows/pages.yml@v3.1.0
+```
+
+That caller runs `bunx smb build` and uploads `docs`. A site with tests passes them as inputs, for example:
+
+```yaml
+jobs:
+  pages:
+    uses: Pezmc/simple-markdown-builder/.github/workflows/pages.yml@v3.1.0
+    with:
+      test-command: bun test scripts/
+      test-after-build: true
+```
+
+Inputs, all optional:
+
+- `build-command` - Builds the site (default: `bunx smb build`)
+- `test-command` - Runs before the build; skipped when empty (default: empty)
+- `test-after-build` - Re-run `test-command` against the built site (default: `false`)
+- `output-dir` - Directory uploaded to Pages; match the config's `outputDir` (default: `docs`)
+- `fetch-depth` - Checkout depth (default: `0`, full history, which git-based `lastmod` dates need)
+- `bun-version` - Bun version to install (default: `latest`)
+
+The lockfile in the paths filter is `bun.lock`, Bun's text lockfile; older sites may still list the binary `bun.lockb`, which no longer exists and so never triggers a deploy.
