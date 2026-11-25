@@ -10,9 +10,11 @@ export { extractSlugFromPath, normalizePathSeparators, foldAccents, slugifyAncho
 export type {
   BuilderConfig,
   FrontMatter,
+  JsonLd,
   KnownPageMeta,
   PageMeta,
   PageRenderContext,
+  RobotsConfig,
   TranslationConfig,
   UtmParams,
 } from './config.js'

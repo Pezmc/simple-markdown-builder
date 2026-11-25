@@ -13,6 +13,14 @@ import { appendUtmParams, obfuscateMailtoLinks, collectMarkdownFiles, extractSlu
 import { ensureTranslations } from './translations.js'
 import { writeSitemap, groupByTranslation, buildAlternateLinks, resolveCanonicalRelative } from './sitemap.js'
 import { checkLinks } from './link-checker.js'
+import {
+  assertRobotsWritable,
+  gitLastModifiedDates,
+  isNotFoundOutput,
+  lastModifiedFor,
+  warnRelativeUrlsOnNotFound,
+  writeRobots,
+} from './seo.js'
 
 export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
   clearTemplateCache()
@@ -40,16 +48,26 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
     return []
   }
 
+  if (config.robots) {
+    await assertRobotsWritable(outputDir)
+  }
+
+  const dates = config.lastmod === 'git' ? await gitLastModifiedDates(contentDir) : undefined
+
   const md = createMarkdownRenderer(config.markdownOptions)
   const plans = await Promise.all(
     markdownFiles.map(async (filePath) =>
-      createPlan(filePath, config, contentDir, outputDir, md, defaultLang, supportedLangs),
+      createPlan(filePath, config, contentDir, outputDir, md, defaultLang, supportedLangs, dates),
     ),
   )
 
   assertUniqueOutputs(plans)
 
   const groups = groupByTranslation(plans)
+  // 404 pages stand in for every missing URL, so they are nobody's translation.
+  const hreflangGroups = groupByTranslation(
+    plans.filter((plan) => !isNotFoundOutput(plan.relativeOutput, supportedLangs)),
+  )
 
   await Promise.all(
     plans.map(async (plan) => {
@@ -57,8 +75,12 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
       const isHomepage =
         plan.relativeOutput === 'index.html' ||
         supportedLangs.some((lang) => plan.relativeOutput === `${lang}/index.html`)
-      const alternates = buildAlternateLinks(plan, groups, config.baseUrl, defaultLang)
-      const canonicalRelative = resolveCanonicalRelative(plan, groups)
+      const notFound = isNotFoundOutput(plan.relativeOutput, supportedLangs)
+      const alternates = notFound
+        ? undefined
+        : buildAlternateLinks(plan, hreflangGroups, config.baseUrl, defaultLang)
+      const canonicalRelative = resolveCanonicalRelative(plan, hreflangGroups)
+      const jsonLd = config.jsonLd?.(plan, { plans, groups })
       const rendered = await renderTemplate(
         plan.html,
         plan.meta,
@@ -68,10 +90,14 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
         config.homepageTemplatePath,
         alternates,
         canonicalRelative,
+        { jsonLd, notFound },
       )
       const html = config.onPageRendered
         ? await config.onPageRendered(rendered, plan, { plans, groups })
         : rendered
+      if (notFound) {
+        warnRelativeUrlsOnNotFound(html, plan.relativeOutput)
+      }
       await writeFile(plan.outputPath, html)
       console.log(`Generated ${path.relative(process.cwd(), plan.outputPath)}`)
     }),
@@ -80,7 +106,11 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
   await config.onPagesWritten?.(plans, outputDir)
 
   // Generate sitemap
-  await writeSitemap(plans, outputDir, config.baseUrl, defaultLang, groups)
+  await writeSitemap(plans, outputDir, config.baseUrl, defaultLang, hreflangGroups)
+
+  if (config.robots) {
+    await writeRobots(plans, outputDir, config.baseUrl, config.robots)
+  }
 
   // Check links unless skipped
   if (!config.skipLinkCheck) {
@@ -115,6 +145,7 @@ async function createPlan(
   md: ReturnType<typeof createMarkdownRenderer>,
   defaultLang: string,
   supportedLangs: readonly string[],
+  dates: ReadonlyMap<string, string> | undefined,
 ): Promise<RenderPlan> {
   const sourcePath = path.resolve(filePath)
   const relativeSource = path.relative(contentDir, sourcePath)
@@ -149,6 +180,10 @@ async function createPlan(
     slug,
     lang,
     output: outputName,
+    // Git is the only source, so a front-matter `lastModified` key never reaches the sitemap.
+    lastModified: lastModifiedFor(dates, contentDir, sourcePath),
+    // Keeps the 404 page out of the sitemap and search results.
+    ...(isNotFoundOutput(outputName, supportedLangs) ? { noindex: true } : {}),
   }
 
   let html = md.render(body)

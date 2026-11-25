@@ -187,6 +187,12 @@ export async function startDevServer(
         }
       }
 
+      // Match GitHub Pages: the root 404.html answers every missing URL.
+      const notFoundFile = Bun.file(path.join(outputDir, '404.html'))
+      if (await notFoundFile.exists()) {
+        return new Response(notFoundFile, { status: 404 })
+      }
+
       return new Response('Not found', { status: 404 })
     },
   })
