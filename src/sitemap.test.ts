@@ -4,6 +4,7 @@ import path from 'node:path'
 import { buildAlternateLinks, resolveCanonicalRelative, groupByTranslation, writeSitemap } from './sitemap.js'
 import { toAbsoluteUrl } from './template.js'
 import { normalizeIndexUrl } from './utils.js'
+import { build } from './builder.js'
 import type { RenderPlan } from './config.js'
 
 const TEST_DIR = path.join(process.cwd(), '.test-sitemap')
@@ -367,4 +368,51 @@ test('writeSitemap - alternates pair nested pages with their own translations', 
     'hreflang="fr" href="https://example.com/fr/infos/a-propos"',
   )
   expect(entry('https://example.com/workshops/beginner')).not.toContain('classes')
+})
+
+test('build - redirect stubs stay out of sitemap.xml and hreflang alternates', async () => {
+  const contentDir = path.join(TEST_DIR, 'content')
+  const outputDir = path.join(TEST_DIR, 'docs')
+  const templatePath = path.join(TEST_DIR, 'template.html')
+  await mkdir(path.join(contentDir, 'fr'), { recursive: true })
+  await writeFile(path.join(contentDir, 'about.md'), '# About')
+  await writeFile(path.join(contentDir, 'fr', 'about.md'), '---\ntranslationOf: about\n---\n# À propos')
+  await writeFile(path.join(contentDir, 'rules.md'), '# Rules')
+  await writeFile(templatePath, '<html><head><title>{{TITLE}}</title></head><body>{{LANGUAGE_SWITCHER}}{{BODY}}</body></html>')
+
+  await build({
+    contentDir,
+    outputDir,
+    templatePath,
+    baseUrl: 'https://example.com',
+    defaultMeta: {
+      title: 'Test Site',
+      description: 'Test',
+      sidebarTitle: 'Test',
+      sidebarSummary: 'Test',
+      backLinkHref: '/',
+      backLinkLabel: 'Back',
+    },
+    translations: { targetLanguages: [], defaultLang: 'en', supportedLangs: ['en', 'fr', 'nl'] },
+    translationFallback: 'redirect',
+    redirects: [{ from: '/old-rules', to: '/rules' }],
+  })
+
+  // The stubs exist...
+  await readFile(path.join(outputDir, 'nl', 'about.html'), 'utf-8')
+  await readFile(path.join(outputDir, 'fr', 'rules.html'), 'utf-8')
+  await readFile(path.join(outputDir, 'old-rules.html'), 'utf-8')
+
+  // ...but nothing advertises them.
+  const sitemap = await readFile(path.join(outputDir, 'sitemap.xml'), 'utf-8')
+  expect(sitemap).toContain('<loc>https://example.com/fr/about</loc>')
+  expect(sitemap).not.toContain('https://example.com/nl/')
+  expect(sitemap).not.toContain('https://example.com/fr/rules')
+  expect(sitemap).not.toContain('old-rules')
+
+  const about = await readFile(path.join(outputDir, 'about.html'), 'utf-8')
+  expect(about).toContain('hreflang="fr"')
+  expect(about).not.toContain('hreflang="nl"')
+  const rules = await readFile(path.join(outputDir, 'rules.html'), 'utf-8')
+  expect(rules).not.toContain('hreflang="fr"')
 })

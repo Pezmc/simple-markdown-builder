@@ -21,6 +21,7 @@ import {
   warnRelativeUrlsOnNotFound,
   writeRobots,
 } from './seo.js'
+import { planRedirectStubs, writeRedirectStubs } from './redirects.js'
 
 export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
   clearTemplateCache()
@@ -63,6 +64,8 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
   )
 
   assertUniqueOutputs(plans)
+  // Validated before any page is written, so a bad redirect fails fast.
+  const redirectStubs = planRedirectStubs(config, plans, outputDir, defaultLang, supportedLangs)
 
   const groups = groupByTranslation(plans)
   // 404 pages stand in for every missing URL, so they are nobody's translation.
@@ -104,6 +107,8 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
     }),
   )
 
+  await writeRedirectStubs(redirectStubs, config)
+
   await config.onPagesWritten?.(plans, outputDir)
 
   // Generate sitemap
@@ -117,7 +122,12 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
 
   // Check links unless skipped
   if (!config.skipLinkCheck) {
-    await checkLinks(outputDir)
+    await checkLinks(outputDir, {
+      linkCheck: config.linkCheck,
+      redirectStubs: new Set(redirectStubs.map((stub) => stub.outputPath)),
+      translationGroups: groups,
+      baseUrl: config.baseUrl,
+    })
   }
 
   return plans

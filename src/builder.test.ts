@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, writeFile, rm, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { build } from './builder.js'
+import type { BuilderConfig, RedirectInfo } from './config.js'
 
 const TEST_DIR = path.join(process.cwd(), '.test-builder')
 
@@ -668,4 +669,220 @@ test('build - pairs nested index pages and repeated filenames with their own tra
     'hreflang="fr" href="https://example.com/fr/classes/debutant"',
   )
   expect(entry('https://example.com/workshops/beginner')).not.toContain('hreflang="fr"')
+})
+
+const DEFAULT_META = {
+  title: 'Test Site',
+  description: 'Test',
+  sidebarTitle: 'Test',
+  sidebarSummary: 'Test',
+  backLinkHref: '/',
+  backLinkLabel: 'Back',
+}
+
+async function redirectSite(
+  files: Record<string, string>,
+  overrides: Partial<BuilderConfig> = {},
+): Promise<BuilderConfig> {
+  const contentDir = path.join(TEST_DIR, 'content')
+  const templatePath = path.join(TEST_DIR, 'template.html')
+  for (const [name, body] of Object.entries(files)) {
+    await mkdir(path.dirname(path.join(contentDir, name)), { recursive: true })
+    await writeFile(path.join(contentDir, name), body)
+  }
+  await writeFile(templatePath, '<html><head><title>{{TITLE}}</title></head><body>{{BODY}}</body></html>')
+  return {
+    contentDir,
+    outputDir: path.join(TEST_DIR, 'docs'),
+    templatePath,
+    baseUrl: 'https://example.com',
+    defaultMeta: DEFAULT_META,
+    ...overrides,
+  }
+}
+
+const TRANSLATIONS = {
+  targetLanguages: [],
+  defaultLang: 'en',
+  supportedLangs: ['en', 'fr', 'nl'],
+} as const
+
+test('build - writes a redirect stub with refresh, canonical, noindex and a visible link', async () => {
+  const config = await redirectSite(
+    { 'new-page.md': '# New' },
+    { redirects: [{ from: '/old-page', to: '/new-page' }] },
+  )
+  const plans = await build(config)
+
+  const stub = await readFile(path.join(TEST_DIR, 'docs', 'old-page.html'), 'utf-8')
+  expect(stub).toContain('<meta http-equiv="refresh" content="0; url=/new-page" />')
+  expect(stub).toContain('<link rel="canonical" href="https://example.com/new-page" />')
+  expect(stub).toContain('<meta name="robots" content="noindex, follow" />')
+  expect(stub).toContain('<a href="/new-page">')
+  expect(stub).toContain('<html lang="en">')
+  expect(plans.map((plan) => plan.relativeOutput)).toEqual(['new-page.html'])
+})
+
+test('build - redirects to an external URL', async () => {
+  const config = await redirectSite(
+    { 'index.md': '# Home' },
+    { redirects: [{ from: 'shop/', to: 'https://shop.example.com/?a=1&b=2' }] },
+  )
+  await build(config)
+
+  const stub = await readFile(path.join(TEST_DIR, 'docs', 'shop', 'index.html'), 'utf-8')
+  expect(stub).toContain('url=https://shop.example.com/?a=1&amp;b=2')
+  expect(stub).toContain('<link rel="canonical" href="https://shop.example.com/?a=1&amp;b=2" />')
+})
+
+test('build - rejects a redirect whose from is a real page', async () => {
+  const config = await redirectSite(
+    { 'about.md': '# About', 'team.md': '# Team' },
+    { redirects: [{ from: '/about', to: '/team' }] },
+  )
+  await expect(build(config)).rejects.toThrow('Redirect from /about collides with the page about.html')
+})
+
+test('build - rejects two redirects from the same path', async () => {
+  const config = await redirectSite(
+    { 'about.md': '# About', 'team.md': '# Team' },
+    {
+      redirects: [
+        { from: '/old', to: '/about' },
+        { from: 'old.html', to: '/team' },
+      ],
+    },
+  )
+  await expect(build(config)).rejects.toThrow('Redirect from /old is declared twice')
+})
+
+test('build - rejects a redirect to a page that is not built', async () => {
+  const config = await redirectSite(
+    { 'about.md': '# About' },
+    { redirects: [{ from: '/old', to: '/missing' }] },
+  )
+  await expect(build(config)).rejects.toThrow('Redirect from /old points to /missing, which is not a built page')
+})
+
+test('build - rejects a redirect from a path outside the output directory', async () => {
+  const config = await redirectSite(
+    { 'about.md': '# About' },
+    { redirects: [{ from: '../escape', to: '/about' }] },
+  )
+  await expect(build(config)).rejects.toThrow('must not contain . or .. segments')
+})
+
+test('build - link-checks redirect stubs', async () => {
+  const config = await redirectSite(
+    { 'about.md': '# About' },
+    { redirects: [{ from: '/old', to: '/about#no-such-heading' }] },
+  )
+  await expect(build(config)).rejects.toThrow('/about#no-such-heading from')
+})
+
+test('build - pages may link to a redirect stub', async () => {
+  const config = await redirectSite(
+    { 'index.md': '[Old](/old#about)', 'about.md': '# About' },
+    { redirects: [{ from: '/old', to: '/about' }] },
+  )
+  await build(config)
+})
+
+test('build - translationFallback writes a stub per missing language', async () => {
+  const config = await redirectSite(
+    {
+      'about.md': '# About',
+      'fr/about.md': '---\ntranslationOf: about\n---\n# À propos',
+      'rules.md': '# Rules',
+    },
+    { translations: TRANSLATIONS, translationFallback: 'redirect' },
+  )
+  await build(config)
+
+  const docs = path.join(TEST_DIR, 'docs')
+  const nlAbout = await readFile(path.join(docs, 'nl', 'about.html'), 'utf-8')
+  expect(nlAbout).toContain('url=/about')
+  expect(nlAbout).toContain('<html lang="nl">')
+  expect(await readFile(path.join(docs, 'fr', 'rules.html'), 'utf-8')).toContain('url=/rules')
+  expect(await readFile(path.join(docs, 'nl', 'rules.html'), 'utf-8')).toContain('url=/rules')
+  // The real translation is kept.
+  expect(await readFile(path.join(docs, 'fr', 'about.html'), 'utf-8')).toContain('À propos')
+})
+
+test('build - translationFallback covers each default-language page in a slug group', async () => {
+  const config = await redirectSite(
+    { 'index.md': '# Home', 'guides/index.md': '# Guides' },
+    {
+      translations: { ...TRANSLATIONS, supportedLangs: ['en', 'fr'] },
+      translationFallback: 'redirect',
+    },
+  )
+  await build(config)
+
+  const docs = path.join(TEST_DIR, 'docs')
+  expect(await readFile(path.join(docs, 'fr', 'index.html'), 'utf-8')).toContain('url=/"')
+  expect(await readFile(path.join(docs, 'fr', 'guides', 'index.html'), 'utf-8')).toContain('url=/guides/')
+})
+
+test('build - translationFallback fails when a fallback path is a real page of another group', async () => {
+  const config = await redirectSite(
+    { 'about.md': '# About', 'fr/about.md': '---\ntranslationOf: something-else\n---\n# À propos' },
+    {
+      translations: { ...TRANSLATIONS, supportedLangs: ['en', 'fr'] },
+      translationFallback: 'redirect',
+    },
+  )
+  await expect(build(config)).rejects.toThrow('Redirect from /fr/about collides with the page fr/about.html')
+})
+
+test('build - translationFallback fails when it collides with an explicit redirect', async () => {
+  const config = await redirectSite(
+    { 'about.md': '# About' },
+    {
+      translations: { ...TRANSLATIONS, supportedLangs: ['en', 'fr'] },
+      translationFallback: 'redirect',
+      redirects: [{ from: '/fr/about', to: '/about' }],
+    },
+  )
+  await expect(build(config)).rejects.toThrow('Redirect from /fr/about is declared twice')
+})
+
+test('build - renderRedirect replaces the stub HTML', async () => {
+  const seen: RedirectInfo[] = []
+  const config = await redirectSite(
+    { 'about.md': '# About', 'new.md': '# New' },
+    {
+      translations: { ...TRANSLATIONS, supportedLangs: ['en', 'fr'] },
+      translationFallback: 'redirect',
+      redirects: [{ from: '/fr/old', to: '/new' }],
+      renderRedirect: (info) => {
+        seen.push(info)
+        return `<p lang="${info.lang}">${info.reason}: <a href="${info.to}">go</a></p>`
+      },
+    },
+  )
+  await build(config)
+
+  expect(await readFile(path.join(TEST_DIR, 'docs', 'fr', 'about.html'), 'utf-8')).toBe(
+    '<p lang="fr">untranslated: <a href="/about">go</a></p>',
+  )
+  expect(seen).toContainEqual({ from: '/fr/old', to: '/new', lang: 'fr', reason: 'moved' })
+  expect(seen).toContainEqual({ from: '/fr/about', to: '/about', lang: 'fr', reason: 'untranslated' })
+})
+
+test('build - linkCheck.translationSiblings fails a template without the language switcher', async () => {
+  const config = await redirectSite(
+    { 'about.md': '# About', 'fr/about.md': '---\ntranslationOf: about\n---\n# À propos' },
+    {
+      translations: { ...TRANSLATIONS, supportedLangs: ['en', 'fr'] },
+      linkCheck: { translationSiblings: true },
+    },
+  )
+  await expect(build(config)).rejects.toThrow('Translated pages missing a link to a sibling translation')
+
+  await writeFile(
+    config.templatePath,
+    '<html><head><title>{{TITLE}}</title></head><body>{{LANGUAGE_SWITCHER}}{{BODY}}</body></html>',
+  )
+  await build(config)
 })

@@ -1,10 +1,17 @@
 import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
-import type { MissingLink } from './config.js'
-import { collectHtmlFiles, slugifyAnchor, logWarning } from './utils.js'
+import type { LinkCheckConfig, MissingLink, RenderPlan } from './config.js'
+import {
+  collectHtmlFiles,
+  slugifyAnchor,
+  logWarning,
+  normalizeIndexUrl,
+  stripHtmlExtension,
+} from './utils.js'
 
 const SKIP_PREFIXES = ['mailto:', 'tel:', 'javascript:', 'data:']
 const SKIP_SCHEMES = ['http://', 'https://']
+const ABSOLUTE_URL = /^[a-z][a-z\d+.-]*:/i
 
 function isSkippableHref(href: string): boolean {
   return (
@@ -85,7 +92,49 @@ function extractHrefs(html: string): string[] {
   return matches.map((match) => match.slice(6, -1))
 }
 
-export async function checkLinks(outputDir: string): Promise<void> {
+// The leading whitespace keeps lazy-loading `data-src`/`data-srcset` out: they
+// often hold placeholders the page swaps in with script.
+function extractAssetUrls(html: string): string[] {
+  const urls: string[] = []
+  for (const match of html.matchAll(/\ssrc="([^"]*)"/g)) {
+    urls.push(match[1] ?? '')
+  }
+  for (const match of html.matchAll(/\ssrcset="([^"]*)"/g)) {
+    for (const candidate of (match[1] ?? '').split(',')) {
+      urls.push(candidate.trim().split(/\s+/)[0] ?? '')
+    }
+  }
+  return urls.filter(Boolean)
+}
+
+function extractAnchorHrefs(html: string): string[] {
+  return [...html.matchAll(/<a\s(?:[^>]*\s)?href="([^"]+)"/g)].map((match) => match[1] ?? '')
+}
+
+export interface CheckLinksOptions {
+  readonly linkCheck?: LinkCheckConfig
+  // Output files written as redirect stubs. A link to one is valid as is; its
+  // #fragment is not checked because a meta refresh drops it.
+  readonly redirectStubs?: ReadonlySet<string>
+  // Needed by `linkCheck.translationSiblings`.
+  readonly translationGroups?: ReadonlyMap<string, readonly RenderPlan[]>
+  readonly baseUrl?: string
+}
+
+function formatMissing(title: string, missing: readonly MissingLink[]): string {
+  const details = missing
+    .map(
+      (miss) =>
+        `- ${miss.href} from ${path.relative(process.cwd(), miss.fromFile)} -> missing ${path.relative(process.cwd(), miss.resolvedPath)}`,
+    )
+    .join('\n')
+  return `${title}:\n${details}`
+}
+
+export async function checkLinks(
+  outputDir: string,
+  options: CheckLinksOptions = {},
+): Promise<void> {
   const resolvedOutputDir = path.resolve(outputDir)
   const htmlFiles = await collectHtmlFiles(resolvedOutputDir)
   if (htmlFiles.length === 0) {
@@ -94,6 +143,9 @@ export async function checkLinks(outputDir: string): Promise<void> {
   }
 
   const missing: MissingLink[] = []
+  const missingAssets: MissingLink[] = []
+  const checkAssets = options.linkCheck?.assets ?? true
+  const redirectStubs = options.redirectStubs ?? new Set<string>()
 
   for (const file of htmlFiles) {
     const content = await readFile(file, 'utf-8')
@@ -136,7 +188,7 @@ export async function checkLinks(outputDir: string): Promise<void> {
 
       // Check anchor link if present
       const anchor = extractAnchor(href)
-      if (anchor && targetFile) {
+      if (anchor && targetFile && !redirectStubs.has(targetFile)) {
         try {
           const targetContent = await readFile(targetFile, 'utf-8')
           const ids = extractIdsFromHtml(targetContent)
@@ -154,18 +206,97 @@ export async function checkLinks(outputDir: string): Promise<void> {
         }
       }
     }
+
+    if (checkAssets) {
+      for (const url of extractAssetUrls(content)) {
+        if (ABSOLUTE_URL.test(url) || url.startsWith('//')) {
+          continue
+        }
+        const resolvedPath = resolveInternalPath(url, file, resolvedOutputDir)
+        // A bare relative src on a nested page (guides/x.html -> diagram.png)
+        // is relative to the page in a browser, unlike resolveInternalPath's
+        // site-root reading, so either location counts.
+        const pageRelative = path.resolve(path.dirname(file), url.split(/[?#]/)[0] ?? '')
+        const found =
+          (await findTargetFile(resolvedPath)).found ||
+          (!url.startsWith('/') && (await findTargetFile(pageRelative)).found)
+        if (!found) {
+          missingAssets.push({ fromFile: file, href: url, resolvedPath })
+        }
+      }
+    }
   }
 
-  if (missing.length > 0) {
-    const details = missing
-      .map(
-        (miss) =>
-          `- ${miss.href} from ${path.relative(process.cwd(), miss.fromFile)} -> missing ${path.relative(process.cwd(), miss.resolvedPath)}`,
-      )
-      .join('\n')
-    throw new Error(`Broken internal links found:\n${details}`)
+  const missingSiblings = options.linkCheck?.translationSiblings
+    ? await findMissingSiblingLinks(resolvedOutputDir, options)
+    : []
+
+  const sections = [
+    missing.length > 0 ? formatMissing('Broken internal links found', missing) : '',
+    missingAssets.length > 0 ? formatMissing('Broken asset references found', missingAssets) : '',
+    missingSiblings.length > 0
+      ? formatMissing('Translated pages missing a link to a sibling translation', missingSiblings)
+      : '',
+  ].filter(Boolean)
+
+  if (sections.length > 0) {
+    throw new Error(sections.join('\n'))
   }
 
   console.log('Link check passed: all internal links resolve.')
+}
+
+// Every page whose translation group has other languages must link to each of
+// them with an <a>. hreflang <link> tags in the head do not count: they are
+// for search engines, and a template without {{LANGUAGE_SWITCHER}} still
+// emits them while leaving visitors no way across.
+async function findMissingSiblingLinks(
+  outputDir: string,
+  options: CheckLinksOptions,
+): Promise<MissingLink[]> {
+  const missing: MissingLink[] = []
+  const origin = options.baseUrl ? new URL(options.baseUrl).origin : null
+
+  for (const group of options.translationGroups?.values() ?? []) {
+    const langs = new Set(group.map((plan) => plan.meta.lang))
+    if (langs.size < 2) {
+      continue
+    }
+    for (const plan of group) {
+      const content = await readFile(plan.outputPath, 'utf-8')
+      const linked = new Set<string>()
+      for (const href of extractAnchorHrefs(content)) {
+        const local = origin && href.startsWith(`${origin}/`) ? href.slice(origin.length) : href
+        if (isSkippableHref(local) || local.startsWith('#')) {
+          continue
+        }
+        const { targetFile } = await findTargetFile(
+          resolveInternalPath(local, plan.outputPath, outputDir),
+        )
+        if (targetFile) {
+          linked.add(path.normalize(targetFile))
+        }
+      }
+      // Slug-keyed groups can hold two pages in one language (index.md and
+      // guides/index.md), so a link to either satisfies that language.
+      for (const lang of langs) {
+        const siblings = group.filter((entry) => entry.meta.lang === lang)
+        if (
+          lang === plan.meta.lang ||
+          siblings.some((entry) => linked.has(path.normalize(entry.outputPath)))
+        ) {
+          continue
+        }
+        const sibling = siblings[0]!
+        missing.push({
+          fromFile: plan.outputPath,
+          href: `/${normalizeIndexUrl(stripHtmlExtension(sibling.relativeOutput))}`,
+          resolvedPath: sibling.outputPath,
+        })
+      }
+    }
+  }
+
+  return missing
 }
 

@@ -3,6 +3,7 @@ import { mkdir, writeFile, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { checkLinks } from './link-checker.js'
 import { createMarkdownRenderer } from './markdown.js'
+import type { RenderPlan } from './config.js'
 
 const TEST_DIR = path.join(process.cwd(), '.test-link-checker')
 
@@ -236,3 +237,138 @@ test('checkLinks - handles relative paths from subdirectories', async () => {
   await checkLinks(TEST_DIR)
 })
 
+
+async function expectFailure(run: Promise<void>): Promise<string> {
+  try {
+    await run
+  } catch (error) {
+    return (error as Error).message
+  }
+  throw new Error('expected checkLinks to throw')
+}
+
+test('checkLinks - fails on a missing img src and srcset candidate', async () => {
+  await mkdir(path.join(TEST_DIR, 'img'), { recursive: true })
+  await writeFile(path.join(TEST_DIR, 'img', 'a.webp'), '')
+  await writeFile(
+    path.join(TEST_DIR, 'index.html'),
+    '<img src="/img/missing.png" alt=""><picture><source srcset="/img/a.webp 1x, /img/gone.webp 2x"></picture>',
+  )
+
+  const message = await expectFailure(checkLinks(TEST_DIR))
+  expect(message).toContain('Broken asset references found:')
+  expect(message).toContain('- /img/missing.png from ')
+  expect(message).toContain(`-> missing ${path.relative(process.cwd(), path.join(TEST_DIR, 'img', 'missing.png'))}`)
+  expect(message).toContain('- /img/gone.webp from ')
+  expect(message).not.toContain('/img/a.webp from')
+})
+
+test('checkLinks - resolves asset URLs with a query and skips external, data and lazy-loading URLs', async () => {
+  await mkdir(path.join(TEST_DIR, 'js'), { recursive: true })
+  await writeFile(path.join(TEST_DIR, 'js', 'app.js'), '')
+  await writeFile(
+    path.join(TEST_DIR, 'index.html'),
+    [
+      '<script src="/js/app.js?v=123"></script>',
+      '<img src="https://cdn.example.com/a.png" alt="">',
+      '<img src="//cdn.example.com/b.png" alt="">',
+      '<img src="data:image/png;base64,AAAA" alt="">',
+      '<img data-src="/img/later.png" data-srcset="/img/later-2x.png 2x" alt="">',
+    ].join('\n'),
+  )
+
+  await checkLinks(TEST_DIR)
+})
+
+test('checkLinks - linkCheck.assets: false skips the asset check', async () => {
+  await writeFile(path.join(TEST_DIR, 'index.html'), '<img src="/img/missing.png" alt="">')
+
+  await checkLinks(TEST_DIR, { linkCheck: { assets: false } })
+})
+
+test('checkLinks - a link into a redirect stub is valid without checking its fragment', async () => {
+  const stub = path.join(TEST_DIR, 'old.html')
+  await writeFile(stub, '<meta http-equiv="refresh" content="0; url=/new">')
+  await writeFile(path.join(TEST_DIR, 'new.html'), '<h2 id="intro">Intro</h2>')
+  await writeFile(path.join(TEST_DIR, 'index.html'), '<a href="/old#intro">Old</a>')
+
+  await checkLinks(TEST_DIR, { redirectStubs: new Set([stub]) })
+})
+
+function translatedPair(): RenderPlan[] {
+  const plan = (relativeOutput: string, lang: string): RenderPlan => ({
+    sourcePath: path.join(TEST_DIR, `${relativeOutput}.md`),
+    outputPath: path.join(TEST_DIR, ...relativeOutput.split('/')),
+    relativeOutput,
+    html: '',
+    meta: {
+      title: '',
+      description: '',
+      sidebarTitle: '',
+      sidebarSummary: '',
+      backLinkHref: '/',
+      backLinkLabel: '',
+      slug: 'about',
+      translationOf: 'about',
+      lang,
+      output: relativeOutput,
+    },
+  })
+  return [plan('about.html', 'en'), plan('fr/about.html', 'fr')]
+}
+
+test('checkLinks - translationSiblings fails a page whose only sibling link is an hreflang tag', async () => {
+  await mkdir(path.join(TEST_DIR, 'fr'), { recursive: true })
+  const hreflang = '<link rel="alternate" hreflang="fr" href="https://example.com/fr/about" />'
+  await writeFile(path.join(TEST_DIR, 'about.html'), `<head>${hreflang}</head>`)
+  await writeFile(path.join(TEST_DIR, 'fr', 'about.html'), '<a href="/about">EN</a>')
+
+  const message = await expectFailure(
+    checkLinks(TEST_DIR, {
+      linkCheck: { translationSiblings: true },
+      translationGroups: new Map([['about', translatedPair()]]),
+      baseUrl: 'https://example.com',
+    }),
+  )
+  expect(message).toContain('Translated pages missing a link to a sibling translation:')
+  expect(message).toContain(
+    `- /fr/about from ${path.relative(process.cwd(), path.join(TEST_DIR, 'about.html'))} -> missing ${path.relative(process.cwd(), path.join(TEST_DIR, 'fr', 'about.html'))}`,
+  )
+  expect(message).not.toContain('- /about from')
+})
+
+test('checkLinks - translationSiblings accepts root-relative and baseUrl-absolute links', async () => {
+  await mkdir(path.join(TEST_DIR, 'fr'), { recursive: true })
+  await writeFile(path.join(TEST_DIR, 'about.html'), '<a href="/fr/about" hreflang="fr">FR</a>')
+  await writeFile(path.join(TEST_DIR, 'fr', 'about.html'), '<a class="x" href="https://example.com/about">EN</a>')
+
+  await checkLinks(TEST_DIR, {
+    linkCheck: { translationSiblings: true },
+    translationGroups: new Map([['about', translatedPair()]]),
+    baseUrl: 'https://example.com',
+  })
+})
+
+test('checkLinks - translationSiblings is off by default', async () => {
+  await mkdir(path.join(TEST_DIR, 'fr'), { recursive: true })
+  await writeFile(path.join(TEST_DIR, 'about.html'), '<p>No switcher</p>')
+  await writeFile(path.join(TEST_DIR, 'fr', 'about.html'), '<p>Pas de lien</p>')
+
+  await checkLinks(TEST_DIR, { translationGroups: new Map([['about', translatedPair()]]) })
+})
+
+test('checkLinks - a bare relative src on a nested page resolves next to the page', async () => {
+  const guides = path.join(TEST_DIR, 'guides')
+  await mkdir(guides, { recursive: true })
+  await writeFile(path.join(guides, 'diagram.png'), '')
+  await writeFile(
+    path.join(guides, 'x.html'),
+    '<img src="diagram.png" alt=""><iframe src="about:blank"></iframe>',
+  )
+  await checkLinks(TEST_DIR)
+
+  await writeFile(path.join(guides, 'y.html'), '<img src="missing.png" alt="">')
+  const message = await expectFailure(checkLinks(TEST_DIR))
+  expect(message).toContain('- missing.png from ')
+  expect(message).not.toContain('diagram.png')
+})
