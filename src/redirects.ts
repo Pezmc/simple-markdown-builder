@@ -29,10 +29,26 @@ function normalizeFrom(from: string): string {
     throw new Error(`Redirect from "${from}" must not contain backslashes`)
   }
   const trimmed = from.replace(/\/+/g, '/').replace(/^\//, '')
-  if (trimmed.split('/').some((segment) => segment === '..' || segment === '.')) {
+  // Hosts decode the request path before looking up a file, so the stub is
+  // written under the decoded name ("le%C3%A7ons" -> "leçons.html"), and an
+  // encoded "%2e%2e" is caught as the ".." it becomes.
+  const segments = trimmed.split('/').map((segment) => {
+    let decoded: string
+    try {
+      decoded = decodeURIComponent(segment)
+    } catch {
+      throw new Error(`Redirect from "${from}" has a malformed percent escape`)
+    }
+    if (/[/\\]/.test(decoded)) {
+      throw new Error(`Redirect from "${from}" must not encode a slash or backslash`)
+    }
+    return decoded
+  })
+  if (segments.some((segment) => segment === '..' || segment === '.')) {
     throw new Error(`Redirect from "${from}" must not contain . or .. segments`)
   }
-  const withIndex = trimmed === '' || trimmed.endsWith('/') ? `${trimmed}index` : trimmed
+  const decodedPath = segments.join('/')
+  const withIndex = decodedPath === '' || decodedPath.endsWith('/') ? `${decodedPath}index` : decodedPath
   // Only .html stubs are served for their extensionless URL; "/old.htm" would
   // be written to old.html and still 404.
   const extension = path.posix.extname(withIndex)

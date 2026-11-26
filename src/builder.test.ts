@@ -971,3 +971,20 @@ test('build - accepts an upper-case http scheme and refuses an upper-case .HTML 
   const bad = await redirectSite({ 'about.md': '# About' }, { redirects: [{ from: '/old.HTML', to: '/about' }] })
   await expect(build(bad)).rejects.toThrow('must end in .html or have no extension')
 })
+
+test('build - decodes a percent-encoded redirect from before validating and writing it', async () => {
+  const config = await redirectSite(
+    { 'fr/cours.md': '---\nlang: fr\n---\n# Cours' },
+    {
+      translations: { ...TRANSLATIONS, supportedLangs: ['en', 'fr'] },
+      redirects: [{ from: '/fr/le%C3%A7ons', to: '/fr/cours' }],
+    },
+  )
+  await build(config)
+  expect(await readFile(path.join(TEST_DIR, 'docs', 'fr', 'leçons.html'), 'utf-8')).toContain('url=/fr/cours')
+
+  for (const from of ['/%2e%2e/old', '/a%2Fb', '/bad%E0%A4%A']) {
+    const bad = await redirectSite({ 'about.md': '# About' }, { redirects: [{ from, to: '/about' }] })
+    await expect(build(bad)).rejects.toThrow(`Redirect from "${from}"`)
+  }
+})

@@ -478,3 +478,17 @@ test('checkLinks - reads src after a quoted attribute containing >', async () =>
   expect(message).toContain('- /missing.png from ')
   expect(message).toContain('- /gone.png from ')
 })
+
+test('checkLinks - translationSiblings ignores a commented-out switcher', async () => {
+  await mkdir(path.join(TEST_DIR, 'fr'), { recursive: true })
+  await writeFile(path.join(TEST_DIR, 'about.html'), '<!-- <a href="/fr/about">FR</a> -->')
+  await writeFile(path.join(TEST_DIR, 'fr', 'about.html'), '<a href="/about">EN</a>')
+
+  const message = await expectFailure(
+    checkLinks(TEST_DIR, {
+      linkCheck: { translationSiblings: true },
+      translationGroups: new Map([['about', translatedPair()]]),
+    }),
+  )
+  expect(message).toContain('- /fr/about from ')
+})

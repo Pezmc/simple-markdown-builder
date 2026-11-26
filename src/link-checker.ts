@@ -129,14 +129,19 @@ function srcsetUrls(srcset: string): string[] {
   return urls
 }
 
-// Only attributes of real tags count: comments and inline script bodies are
-// dropped first, since `const src = "..."` or a commented-out <img> is never
-// requested. The leading whitespace keeps lazy-loading `data-src`/`data-srcset`
-// out: they often hold placeholders the page swaps in with script.
-function extractAssetUrls(html: string): string[] {
-  const markup = html
+// Comments and inline script bodies are never rendered as tags, so a
+// commented-out <img> or switcher, or `const src = "..."`, must not count.
+function stripInactiveMarkup(html: string): string {
+  return html
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/(<script\b[^>]*>)[\s\S]*?<\/script>/gi, '$1</script>')
+}
+
+// Only attributes of real tags count. The leading whitespace keeps
+// lazy-loading `data-src`/`data-srcset` out: they often hold placeholders the
+// page swaps in with script.
+function extractAssetUrls(html: string): string[] {
+  const markup = stripInactiveMarkup(html)
   const urls: string[] = []
   // A tag ends at the first > outside a quoted attribute value.
   for (const [tag] of markup.matchAll(/<[a-z](?:[^>"']|"[^"]*"|'[^']*')*>/gi)) {
@@ -149,7 +154,7 @@ function extractAssetUrls(html: string): string[] {
 }
 
 function extractAnchorHrefs(html: string): string[] {
-  return [...html.matchAll(/<a\s(?:[^>]*\s)?href\s*=\s*(?:"([^"]+)"|'([^']+)')/gi)].map(
+  return [...stripInactiveMarkup(html).matchAll(/<a\s(?:[^>]*\s)?href\s*=\s*(?:"([^"]+)"|'([^']+)')/gi)].map(
     (match) => match[1] ?? match[2] ?? '',
   )
 }
