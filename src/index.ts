@@ -11,6 +11,8 @@ export { extractSlugFromPath, normalizePathSeparators, foldAccents, slugifyAncho
 export type {
   BuilderConfig,
   FrontMatter,
+  Heading,
+  iAlternateLink,
   JsonLd,
   KnownPageMeta,
   LinkCheckConfig,

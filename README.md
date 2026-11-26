@@ -129,7 +129,7 @@ await startDevServer(config, {
 - `linkCheck` - Turn individual link checks on or off (see [Link Checking](#link-checking))
 - `redirects` - Redirect stubs for moved pages (see [Redirects](#redirects))
 - `translationFallback` - Set to `'redirect'` to write a stub for every missing translation (see [Redirects](#redirects))
-- `renderRedirect` - Optional function that returns the HTML of each redirect stub
+- `renderRedirect` - Optional function that returns (or resolves to) the HTML of each redirect stub
 - `clean` - Clean HTML files from output directory before building (default: `false`)
 - `onPageRendered` - Optional hook to rewrite each page's HTML before it is written (see below)
 - `onPagesWritten` - Optional hook that runs once every page is written, before the link check (see below)
@@ -139,7 +139,7 @@ await startDevServer(config, {
 
 ### Build Hooks
 
-`onPageRendered(html, plan, { plans, groups })` receives each page's rendered HTML and returns the HTML to write. `plans` is every page in the build and `groups` maps each translation group key (the page's path without its language directory, e.g. `classes/index`) to its pages, so the hook can add cross-page navigation. Pages render concurrently, so the hook must not depend on the order it is called in.
+`onPageRendered(html, plan, { plans, groups, alternates })` receives each page's rendered HTML and returns the HTML to write. `plans` is every page in the build and `groups` maps each translation group key (the page's path without its language directory, e.g. `classes/index`) to its pages, so the hook can add cross-page navigation. `alternates` is the page's own `{ lang, href }` list, the one the builder uses for its hreflang tags and language switcher: absolute URLs, default language first, and **the `x-default` entry last** (filter on `lang !== 'x-default'` for a switcher). It is empty on 404 pages. `buildAlternateLinks` stays exported, but a hook no longer needs to call it. Pages render concurrently, so the hook must not depend on the order it is called in.
 
 `onPagesWritten(plans, outputDir)` runs after every page and [redirect stub](#redirects) is written and before the link check, even when `skipLinkCheck` is set. Write extra files here that the rewritten pages link to. Files written here are link-checked but stay out of the sitemap, which is built from `plans`.
 
@@ -151,6 +151,23 @@ await build({
   onPageRendered: (html, plan, { groups }) => html.replace('</main>', `${renderNav(plan, groups)}</main>`),
   onPagesWritten: async (plans, outputDir) => {
     await writeFile(path.join(outputDir, 'events.json'), JSON.stringify(listEvents(plans)))
+  },
+})
+```
+
+`plan.headings` lists the page's markdown headings in document order as `{ id, text, level }`. `id` is the anchor the rendered heading carries, `text` is plain text (inline markup such as `**bold**` and `` `code` `` stripped, entities like `&amp;` decoded, so escape it before writing it into HTML) and `level` is 1–3. Only `#`, `##` and `###` headings are listed, since those are the levels that get an anchor. Headings written as raw HTML in the markdown (`<h2 id="x">…</h2>`) are not included. A table of contents built from them:
+
+```typescript
+const escape = (text: string) =>
+  text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+await build({
+  ...config,
+  onPageRendered: (html, plan) => {
+    const items = plan.headings
+      .filter((heading) => heading.level === 2)
+      .map((heading) => `<li><a href="#${heading.id}">${escape(heading.text)}</a></li>`)
+    return items.length < 2 ? html : html.replace('<main>', `<main><nav class="toc"><ul>${items.join('')}</ul></nav>`)
   },
 })
 ```
@@ -186,7 +203,7 @@ The build fails, before any page is written, when:
 
 Stubs are written after the pages and before `onPagesWritten`, and are link-checked like any page. They are not in `plans`, so they stay out of `sitemap.xml`, hreflang alternates, the language switcher and the hook context. A link to a stub is valid; its `#fragment` is not checked, since a meta refresh drops it. The dev server serves stubs like any other page.
 
-To localise the stub, pass `renderRedirect`. It receives `{ from, to, lang, reason }` and returns the whole HTML document. `from` is the stub's site path (`/nl/about`), `lang` is the stub's language (the first path segment when it is one of `supportedLangs`, else the default language), and `reason` is `'moved'` for `redirects` and `'untranslated'` for fallbacks:
+To localise the stub, pass `renderRedirect`. It receives `{ from, to, lang, reason }` and returns the whole HTML document, or a promise of it, so it can read a file or hash an asset first. Stubs are rendered concurrently. `from` is the stub's site path (`/nl/about`), `lang` is the stub's language (the first path segment when it is one of `supportedLangs`, else the default language), and `reason` is `'moved'` for `redirects` and `'untranslated'` for fallbacks:
 
 ```typescript
 renderRedirect: ({ to, lang, reason }) => `<!DOCTYPE html>
@@ -357,7 +374,7 @@ GitHub Actions' `actions/checkout` makes a shallow clone by default, so fetch th
 
 ### Structured data (JSON-LD)
 
-`jsonLd(plan, { plans, groups })` returns an object, an array of objects, or `undefined` for each page. The result is injected before `</head>` as `<script type="application/ld+json">`, with `<` escaped so the data cannot close the script element. Without the hook, no JSON-LD is emitted: the builder invents no schemas.
+`jsonLd(plan, { plans, groups, alternates })` returns an object, an array of objects, or `undefined` for each page. The result is injected before `</head>` as `<script type="application/ld+json">`, with `<` escaped so the data cannot close the script element. Without the hook, no JSON-LD is emitted: the builder invents no schemas.
 
 ```typescript
 await build({
@@ -373,7 +390,7 @@ await build({
 })
 ```
 
-The hook runs before `onPageRendered`.
+The hook runs before `onPageRendered` and receives the same context object, `alternates` included (see [Build Hooks](#build-hooks)).
 
 ### robots.txt
 
@@ -414,6 +431,12 @@ These change the output of existing templates:
 - **`{{> ...}}` is an include**: a template that contained that text literally now reads it as a file to insert.
 
 `defaultMeta` accepts keys beyond the known ones, so `defaultMeta: { eyebrow: '' }` type-checks.
+
+Also new and additive; existing configs and hooks work unchanged:
+
+- **`plan.headings`**: each page's h1–h3 markdown headings as `{ id, text, level }`, taken from the markdown token stream, so a table of contents no longer has to parse the rendered HTML. See [Build Hooks](#build-hooks).
+- **`alternates` in the hook context**: `onPageRendered` and `jsonLd` receive the page's hreflang alternates (with `x-default` last) as `context.alternates`, instead of calling `buildAlternateLinks` themselves.
+- **Async `renderRedirect`**: it may return a `Promise<string>`, and the builder awaits it. Before, a returned promise was passed straight to the file write and the build failed.
 
 ### Changes in v3.1
 

@@ -55,6 +55,16 @@ export interface RenderPlan {
   readonly relativeOutput: string
   readonly html: string
   readonly meta: PageMeta
+  // The anchored (h1–h3) markdown headings in document order.
+  readonly headings: readonly Heading[]
+}
+
+export interface Heading {
+  // The id attribute the rendered heading carries.
+  readonly id: string
+  // Plain text: inline markup stripped, entities decoded.
+  readonly text: string
+  readonly level: number
 }
 
 export interface iAlternateLink {
@@ -114,6 +124,8 @@ export interface RedirectInfo {
 export interface PageRenderContext {
   readonly plans: readonly RenderPlan[]
   readonly groups: ReadonlyMap<string, readonly RenderPlan[]>
+  // The page's hreflang alternates, x-default last; empty on 404 pages.
+  readonly alternates: readonly iAlternateLink[]
 }
 
 export type JsonLd = object | readonly object[]
@@ -140,7 +152,7 @@ export interface BuilderConfig {
   readonly linkCheck?: LinkCheckConfig
   readonly redirects?: readonly Redirect[]
   readonly translationFallback?: 'redirect'
-  readonly renderRedirect?: (info: RedirectInfo) => string
+  readonly renderRedirect?: (info: RedirectInfo) => string | Promise<string>
   readonly clean?: boolean
   readonly lastmod?: 'git' | false
   readonly robots?: boolean | RobotsConfig

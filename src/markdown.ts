@@ -1,6 +1,7 @@
 import MarkdownIt from 'markdown-it'
 import type { Options as MarkdownItOptions } from 'markdown-it'
 import markdownItAnchor from 'markdown-it-anchor'
+import type { Heading } from './config.js'
 import { slugifyAnchor } from './utils.js'
 
 export function createMarkdownRenderer(options?: MarkdownItOptions): MarkdownIt {
@@ -24,3 +25,31 @@ export function createMarkdownRenderer(options?: MarkdownItOptions): MarkdownIt 
   return md
 }
 
+export interface RenderedMarkdown {
+  readonly html: string
+  readonly headings: Heading[]
+}
+
+// Parses once and renders the same tokens, so each heading's id is the one
+// markdown-it-anchor set (deduplicated) and the one written into the HTML.
+export function renderMarkdown(md: MarkdownIt, body: string): RenderedMarkdown {
+  const env = {}
+  const tokens = md.parse(body, env)
+  const headings: Heading[] = []
+  tokens.forEach((token, index) => {
+    const id = token.type === 'heading_open' ? token.attrGet('id') : null
+    if (id === null) {
+      return
+    }
+    // Child text tokens hold decoded text; a line break inside a setext heading
+    // becomes a space, and html_inline and markup tokens are dropped.
+    const text = (tokens[index + 1]?.children ?? [])
+      .map((child) => {
+        if (child.type === 'softbreak' || child.type === 'hardbreak') return ' '
+        return child.type === 'text' || child.type === 'code_inline' ? child.content : ''
+      })
+      .join('')
+    headings.push({ id, text, level: Number(token.tag.slice(1)) })
+  })
+  return { html: md.renderer.render(tokens, md.options, env), headings }
+}
