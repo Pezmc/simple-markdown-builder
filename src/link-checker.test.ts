@@ -540,3 +540,19 @@ test('checkLinks - translationSiblings compares absolute links by origin, ignori
     baseUrl: 'https://example.com',
   })
 })
+
+test('checkLinks - translationSiblings resolves a bare relative link from the containing page', async () => {
+  await mkdir(path.join(TEST_DIR, 'fr'), { recursive: true })
+  await writeFile(path.join(TEST_DIR, 'about.html'), '<a href="fr/about">FR</a>')
+  // On fr/about.html, "about" is a self-link, not a link to the English page.
+  await writeFile(path.join(TEST_DIR, 'fr', 'about.html'), '<a href="about">EN?</a>')
+
+  const message = await expectFailure(
+    checkLinks(TEST_DIR, {
+      linkCheck: { translationSiblings: true },
+      translationGroups: new Map([['about', translatedPair()]]),
+    }),
+  )
+  expect(message).toContain('- /about from ')
+  expect(message).not.toContain('- /fr/about from ')
+})

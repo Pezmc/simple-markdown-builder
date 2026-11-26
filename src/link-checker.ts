@@ -102,10 +102,10 @@ function extractHrefs(html: string): string[] {
 
 const SITE = 'http://site/'
 
-// The file an asset URL names, after the browser's own path resolution.
+// The file a URL names, after the browser's own path resolution.
 // Markdown percent-encodes image URLs ("my photo.png" renders as
 // my%20photo.png), and the file on disk has the decoded name.
-function assetPath(url: string, base: string, outputDir: string): string {
+function browserPath(url: string, base: string, outputDir: string): string {
   // Segments decode one at a time, as the dev server does, so "%23" becomes
   // "#" but an encoded slash stays inside its segment. A malformed escape is
   // checked as written.
@@ -291,8 +291,8 @@ export async function checkLinks(
         // reading the href check uses is also accepted.
         const pagePath = path.relative(resolvedOutputDir, file).split(path.sep).join('/')
         const candidates = [
-          ...(url.startsWith('/') ? [] : [assetPath(url, `${SITE}${pagePath}`, resolvedOutputDir)]),
-          assetPath(url, SITE, resolvedOutputDir),
+          ...(url.startsWith('/') ? [] : [browserPath(url, `${SITE}${pagePath}`, resolvedOutputDir)]),
+          browserPath(url, SITE, resolvedOutputDir),
         ]
         let found = false
         for (const candidate of candidates) {
@@ -362,9 +362,10 @@ async function findMissingSiblingLinks(
         if (isSkippableHref(local) || local.startsWith('#')) {
           continue
         }
-        const { targetFile } = await findTargetFile(
-          resolveInternalPath(local, plan.outputPath, outputDir),
-        )
+        // Resolved from the containing page as a browser would: on
+        // fr/about.html, "about" is a self-link, not the English page.
+        const pagePath = path.relative(outputDir, plan.outputPath).split(path.sep).join('/')
+        const { targetFile } = await findTargetFile(browserPath(local, `${SITE}${pagePath}`, outputDir))
         if (targetFile) {
           linked.add(path.normalize(targetFile))
         }
