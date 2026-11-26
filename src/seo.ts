@@ -126,8 +126,10 @@ export async function assertRobotsWritable(outputDir: string): Promise<void> {
   let existing: string
   try {
     existing = await readFile(robotsPath, 'utf-8')
-  } catch {
-    return
+  } catch (error) {
+    // Only a missing file is safe to write; any other read failure could hide a hand-written one.
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+    throw error
   }
   if (!existing.startsWith(ROBOTS_MARKER)) {
     throw new Error(
@@ -140,12 +142,13 @@ export async function assertRobotsWritable(outputDir: string): Promise<void> {
 // noindex pages are deliberately not disallowed: a crawler blocked from a
 // page never sees its noindex tag, so a linked URL can stay in search results.
 export function renderRobots(baseUrl: string, robots: true | RobotsConfig): string {
-  const rules = (robots === true ? [] : (robots.disallow ?? [])).map((urlPath) => `Disallow: ${urlPath}`)
+  const disallow = robots === true ? [] : (robots.disallow ?? [])
   return [
     ROBOTS_MARKER,
     'User-agent: *',
-    'Allow: /',
-    ...rules,
+    // An equally specific Allow wins over Disallow (RFC 9309), so `Allow: /` would undo `Disallow: /`.
+    ...(disallow.includes('/') ? [] : ['Allow: /']),
+    ...disallow.map((urlPath) => `Disallow: ${urlPath}`),
     '',
     `Sitemap: ${toAbsoluteUrl('sitemap.xml', baseUrl)}`,
     '',

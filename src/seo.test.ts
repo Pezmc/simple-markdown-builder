@@ -1,5 +1,8 @@
 import { test, expect } from 'bun:test'
-import { findRelativeUrls, isNotFoundOutput, lastModifiedFor, parseGitLog, renderRobots } from './seo.js'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { assertRobotsWritable, findRelativeUrls, isNotFoundOutput, lastModifiedFor, parseGitLog, renderRobots } from './seo.js'
 
 test('isNotFoundOutput - matches the root and language 404 pages only', () => {
   expect(isNotFoundOutput('404.html', ['en', 'fr'])).toBe(true)
@@ -56,4 +59,21 @@ test('renderRobots - writes Allow, the configured disallow entries and the sitem
     ].join('\n'),
   )
   expect(renderRobots('https://example.com', true)).not.toContain('Disallow')
+})
+
+test('renderRobots - omits Allow: / when the whole site is disallowed', () => {
+  const robots = renderRobots('https://example.com', { disallow: ['/'] })
+  expect(robots).toContain('Disallow: /\n')
+  expect(robots).not.toContain('Allow: /')
+})
+
+test('assertRobotsWritable - rethrows read errors other than a missing file', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'smb-robots-'))
+  await mkdir(path.join(dir, 'robots.txt'))
+  try {
+    await expect(assertRobotsWritable(dir)).rejects.toThrow()
+    await expect(assertRobotsWritable(path.join(dir, 'missing'))).resolves.toBeUndefined()
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
 })

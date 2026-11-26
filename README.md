@@ -237,7 +237,7 @@ Disallow: /drafts/
 Sitemap: https://example.com/sitemap.xml
 ```
 
-`disallow` entries are written verbatim. `noindex` pages and 404 pages are deliberately not disallowed: a crawler blocked by robots.txt never fetches the page, so it never sees the noindex tag, and a URL other sites link to can stay in search results.
+`disallow` entries are written verbatim. `Allow: /` is left out when `disallow` contains `/`, since an equally specific `Allow` would override it. `noindex` pages and 404 pages are deliberately not disallowed: a crawler blocked by robots.txt never fetches the page, so it never sees the noindex tag, and a URL other sites link to can stay in search results.
 
 The first line marks the file as generated. If `outputDir` already holds a `robots.txt` without that marker, the build fails instead of overwriting it; delete the file or leave `robots` off. The default, `false`, never touches `robots.txt`.
 
