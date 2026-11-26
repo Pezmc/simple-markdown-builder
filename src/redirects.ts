@@ -74,7 +74,14 @@ function isHttpUrl(to: string): boolean {
 // The built page an internal `to` lands on, tried the way a static host
 // resolves it: as is, with .html, and as a directory index.
 function resolveTarget(to: string, pages: ReadonlyMap<string, RenderPlan>): RenderPlan | undefined {
-  const pathname = (to.split(/[?#]/)[0] ?? '').replace(/^\/+/, '')
+  // Output paths are decoded file names, so "/team%20docs/about" is looked up
+  // as "team docs/about".
+  let pathname = (to.split(/[?#]/)[0] ?? '').replace(/^\/+/, '')
+  try {
+    pathname = decodeURI(pathname)
+  } catch {
+    // A malformed escape is looked up as written and reported as not built.
+  }
   const candidates = pathname === '' || pathname.endsWith('/')
     ? [`${pathname}index.html`]
     : [pathname, `${pathname}.html`, `${pathname}/index.html`]

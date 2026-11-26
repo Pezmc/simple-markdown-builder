@@ -46,7 +46,13 @@ function extractIdsFromHtml(html: string): Set<string> {
 
 function resolveInternalPath(href: string, fromFile: string, outputDir: string): string {
   const withoutHash = href.split('#')[0] ?? ''
-  const withoutQuery = withoutHash.split('?')[0] ?? ''
+  let withoutQuery = withoutHash.split('?')[0] ?? ''
+  // Files on disk carry the decoded name: "/team%20docs/about" is "team docs/about".
+  try {
+    withoutQuery = decodeURI(withoutQuery)
+  } catch {
+    // A malformed escape is resolved as written.
+  }
   
   if (withoutQuery.startsWith('/')) {
     const relativePath = withoutQuery.slice(1).replace(/\/+/g, '/')

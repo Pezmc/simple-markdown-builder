@@ -988,3 +988,14 @@ test('build - decodes a percent-encoded redirect from before validating and writ
     await expect(build(bad)).rejects.toThrow(`Redirect from "${from}"`)
   }
 })
+
+test('build - decodes an internal redirect target before looking up the page', async () => {
+  const config = await redirectSite(
+    { 'team docs/about.md': '# About' },
+    { redirects: [{ from: '/old', to: '/team%20docs/about' }] },
+  )
+  await build(config)
+  expect(await readFile(path.join(TEST_DIR, 'docs', 'old.html'), 'utf-8')).toContain(
+    '<link rel="canonical" href="https://example.com/team%20docs/about" />',
+  )
+})
