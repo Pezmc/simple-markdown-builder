@@ -90,6 +90,27 @@ export interface TranslationConfig {
   readonly supportedLangs?: readonly string[]
 }
 
+export interface LinkCheckConfig {
+  // Check local `src` and `srcset` URLs (images, scripts, <source>). Default: true.
+  readonly assets?: boolean
+  // Require every translated page to link (<a href>) to each sibling
+  // translation. Default: false.
+  readonly translationSiblings?: boolean
+}
+
+export interface Redirect {
+  readonly from: string
+  readonly to: string
+}
+
+export interface RedirectInfo {
+  // The stub's site path, e.g. "/fr/about".
+  readonly from: string
+  readonly to: string
+  readonly lang: string
+  readonly reason: 'moved' | 'untranslated'
+}
+
 export interface PageRenderContext {
   readonly plans: readonly RenderPlan[]
   readonly groups: ReadonlyMap<string, readonly RenderPlan[]>
@@ -113,6 +134,10 @@ export interface BuilderConfig {
   readonly utmParams?: UtmParams
   readonly noreferrer?: boolean
   readonly skipLinkCheck?: boolean
+  readonly linkCheck?: LinkCheckConfig
+  readonly redirects?: readonly Redirect[]
+  readonly translationFallback?: 'redirect'
+  readonly renderRedirect?: (info: RedirectInfo) => string
   readonly clean?: boolean
   readonly lastmod?: 'git' | false
   readonly robots?: boolean | RobotsConfig

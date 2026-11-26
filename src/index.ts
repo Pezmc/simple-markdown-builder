@@ -2,6 +2,7 @@ export { build } from './builder.js'
 export type { RenderPlan } from './builder.js'
 export { startDevServer } from './dev-server.js'
 export { checkLinks } from './link-checker.js'
+export type { CheckLinksOptions } from './link-checker.js'
 export { writeSitemap, buildAlternateLinks, resolveCanonicalRelative } from './sitemap.js'
 export { ensureTranslations } from './translations.js'
 export { defineConfig, getDefaultLang, getSupportedLangs } from './config.js'
@@ -12,9 +13,12 @@ export type {
   FrontMatter,
   JsonLd,
   KnownPageMeta,
+  LinkCheckConfig,
   PageMeta,
   PageRenderContext,
   RobotsConfig,
+  Redirect,
+  RedirectInfo,
   TranslationConfig,
   UtmParams,
 } from './config.js'

@@ -126,6 +126,10 @@ await startDevServer(config, {
 - `utmParams` - UTM parameters object for external links
 - `noreferrer` - Add `noreferrer` to the `rel` of external links (default: `false`, emits `rel="noopener"` so destinations still see your origin as the referrer). Only applies when `utmParams` is set, since external links are rewritten by the UTM pass
 - `skipLinkCheck` - Whether to skip link validation
+- `linkCheck` - Turn individual link checks on or off (see [Link Checking](#link-checking))
+- `redirects` - Redirect stubs for moved pages (see [Redirects](#redirects))
+- `translationFallback` - Set to `'redirect'` to write a stub for every missing translation (see [Redirects](#redirects))
+- `renderRedirect` - Optional function that returns the HTML of each redirect stub
 - `clean` - Clean HTML files from output directory before building (default: `false`)
 - `onPageRendered` - Optional hook to rewrite each page's HTML before it is written (see below)
 - `onPagesWritten` - Optional hook that runs once every page is written, before the link check (see below)
@@ -137,7 +141,7 @@ await startDevServer(config, {
 
 `onPageRendered(html, plan, { plans, groups })` receives each page's rendered HTML and returns the HTML to write. `plans` is every page in the build and `groups` maps each translation group key (the page's path without its language directory, e.g. `classes/index`) to its pages, so the hook can add cross-page navigation. Pages render concurrently, so the hook must not depend on the order it is called in.
 
-`onPagesWritten(plans, outputDir)` runs after every page is written and before the link check, even when `skipLinkCheck` is set. Write extra files here, such as redirect stubs that the rewritten pages link to. Files written here are link-checked but stay out of the sitemap, which is built from `plans`.
+`onPagesWritten(plans, outputDir)` runs after every page and [redirect stub](#redirects) is written and before the link check, even when `skipLinkCheck` is set. Write extra files here that the rewritten pages link to. Files written here are link-checked but stay out of the sitemap, which is built from `plans`.
 
 Both hooks may be async. `startDevServer` calls `build()`, so watch mode runs them on every rebuild.
 
@@ -146,7 +150,7 @@ await build({
   ...config,
   onPageRendered: (html, plan, { groups }) => html.replace('</main>', `${renderNav(plan, groups)}</main>`),
   onPagesWritten: async (plans, outputDir) => {
-    await writeFile(path.join(outputDir, 'fr', 'house-rules.html'), redirectTo('/house-rules'))
+    await writeFile(path.join(outputDir, 'events.json'), JSON.stringify(listEvents(plans)))
   },
 })
 ```
@@ -154,6 +158,70 @@ await build({
 Custom front-matter keys pass through onto `plan.meta` (`eyebrow: Welcome` is `plan.meta.eyebrow`). Their values are strings.
 
 The builder's own slug helpers are exported, so a hook can map outputs back to sources with the same rules: `sanitizeSlug`, `foldAccents` and `slugifyAnchor` (the heading-anchor slugifier).
+
+### Redirects
+
+`redirects` writes a stub page at each old path that sends visitors on to the new one:
+
+```typescript
+await build({
+  ...config,
+  redirects: [
+    { from: '/fr/le-ons-particuli-res', to: '/fr/cours-particuliers' },
+    { from: '/shop', to: 'https://shop.example.com' },
+  ],
+})
+```
+
+Each stub is written to `<from>.html` (`/guides/` writes `guides/index.html`; a percent-encoded `from` such as `/fr/le%C3%A7ons` is decoded first, as hosts decode request paths) and carries a `<meta http-equiv="refresh">` to `to`, a `rel="canonical"` with the target's absolute URL, `<meta name="robots" content="noindex, follow">` and a visible link. `to` is a site path starting with `/` or an `http(s)://` URL with a host.
+
+`translationFallback: 'redirect'` writes a stub for every default-language page that has no translation in one of `supportedLangs`. With `about.md` and no `nl/about.md`, `nl/about.html` redirects to `/about`, so a language switcher or nav that always links `/nl/...` never 404s. A translation in another language does not stop it: each missing language gets its own stub. Pages with no default-language version get no fallback, since there is nothing to redirect to.
+
+The build fails, before any page is written, when:
+
+- a `from` is the output of a real page (compared case-insensitively, since `About.html` and `about.html` are one file on macOS and Windows; repeated slashes collapse),
+- two redirects (explicit or fallback) write the same path,
+- an internal `to` is not a page built from `content/` (a static file such as `/files/guide.pdf`, or another redirect stub, does not count),
+- a `from` is an absolute URL, has a query or fragment, contains `.` or `..` segments or a backslash, or ends in an extension other than `.html` (a stub for `/old.htm` would be written to `old.html` and `/old.htm` would still 404).
+
+Stubs are written after the pages and before `onPagesWritten`, and are link-checked like any page. They are not in `plans`, so they stay out of `sitemap.xml`, hreflang alternates, the language switcher and the hook context. A link to a stub is valid; its `#fragment` is not checked, since a meta refresh drops it. The dev server serves stubs like any other page.
+
+To localise the stub, pass `renderRedirect`. It receives `{ from, to, lang, reason }` and returns the whole HTML document. `from` is the stub's site path (`/nl/about`), `lang` is the stub's language (the first path segment when it is one of `supportedLangs`, else the default language), and `reason` is `'moved'` for `redirects` and `'untranslated'` for fallbacks:
+
+```typescript
+renderRedirect: ({ to, lang, reason }) => `<!DOCTYPE html>
+<html lang="${lang}"><head>
+  <meta name="robots" content="noindex, follow" />
+  <meta http-equiv="refresh" content="0; url=${to}" />
+  <link rel="canonical" href="${to.startsWith('/') ? `https://example.com${to}` : to}" />
+</head><body><a href="${to}">${MESSAGES[lang][reason]}</a></body></html>`,
+```
+
+A custom stub must carry its own refresh, canonical and robots tags.
+
+### Link Checking
+
+After the build, every generated HTML file in `outputDir` is checked (skip all of it with `skipLinkCheck: true`):
+
+- **Links** (always on): every `href="..."` that is not external, `mailto:`, `tel:`, `javascript:` or `data:` must resolve to a file, as is, with `.html`, or as `index.html`. A `#fragment`, on the same page or another, must match an `id` on the target page.
+- **Assets** (`linkCheck.assets`, default on): every local `src` and `srcset` URL, single- or double-quoted, (images, scripts, `<source>`) must name a file that exists as written; an `<iframe>` src may name a page, resolved like a link. A bare relative URL may sit next to the page or at the site root. URLs with a scheme (`https:`, `data:`, `blob:`, `about:`) and protocol-relative URLs are skipped, as are `data-src`, `data-srcset`, HTML comments and inline `<script>` bodies. URLs resolve the way a browser resolves them, so `../` never climbs above the site root.
+- **Translation siblings** (`linkCheck.translationSiblings`, default off): every page whose translation group has other languages must link to one page in each of them with an `<a href>`. The hreflang `<link>` tags in the head, and links inside HTML comments, do not count. This catches a template that dropped `{{LANGUAGE_SWITCHER}}`. Absolute links on `baseUrl` count as internal here.
+
+```typescript
+await build({
+  ...config,
+  linkCheck: { assets: true, translationSiblings: true },
+})
+```
+
+Each failure names the href, the source file and the path it resolved to:
+
+```
+Broken asset references found:
+- /img/missing.png from docs/about.html -> missing docs/img/missing.png
+Translated pages missing a link to a sibling translation:
+- /fr/about from docs/about.html -> missing docs/fr/about.html
+```
 
 ### Template Placeholders
 
