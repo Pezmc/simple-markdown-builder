@@ -7,7 +7,7 @@ import type {
 } from './config.js'
 import { getDefaultLang, getSupportedLangs } from './config.js'
 import { extractFrontMatter, sanitizeLang, sanitizeSlug, inferLangFromPath } from './frontmatter.js'
-import { createMarkdownRenderer } from './markdown.js'
+import { createMarkdownRenderer, renderMarkdown } from './markdown.js'
 import {
   BUILT_IN_PLACEHOLDERS,
   clearTemplateCache,
@@ -92,7 +92,9 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
         ? undefined
         : buildAlternateLinks(plan, hreflangGroups, config.baseUrl, defaultLang)
       const canonicalRelative = resolveCanonicalRelative(plan, hreflangGroups)
-      const jsonLd = config.jsonLd?.(plan, { plans, groups })
+      // A copy, so a hook that edits it cannot change the page's hreflang tags.
+      const context = { plans, groups, alternates: (alternates ?? []).map((alt) => ({ ...alt })) }
+      const jsonLd = config.jsonLd?.(plan, context)
       const rendered = await renderTemplate(
         plan.html,
         plan.meta,
@@ -105,7 +107,7 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
         { jsonLd, notFound },
       )
       const html = config.onPageRendered
-        ? await config.onPageRendered(rendered, plan, { plans, groups })
+        ? await config.onPageRendered(rendered, plan, context)
         : rendered
       if (notFound) {
         warnRelativeUrlsOnNotFound(html, plan.relativeOutput)
@@ -244,8 +246,8 @@ async function createPlan(
     ...(isNotFoundOutput(outputName, supportedLangs) ? { noindex: true } : {}),
   }
 
-  let html = md.render(body)
-  html = obfuscateMailtoLinks(html)
+  const rendered = renderMarkdown(md, body)
+  let html = obfuscateMailtoLinks(rendered.html)
   html = appendUtmParams(html, config.utmParams, config.baseUrl, config.noreferrer)
 
   return {
@@ -254,6 +256,7 @@ async function createPlan(
     relativeOutput: outputName,
     html,
     meta: mergedMeta,
+    headings: rendered.headings,
   }
 }
 

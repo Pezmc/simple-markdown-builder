@@ -870,6 +870,80 @@ test('build - renderRedirect replaces the stub HTML', async () => {
   expect(seen).toContainEqual({ from: '/fr/about', to: '/about', lang: 'fr', reason: 'untranslated' })
 })
 
+test('build - awaits an async renderRedirect', async () => {
+  const config = await redirectSite(
+    { 'new.md': '# New' },
+    {
+      redirects: [{ from: '/old', to: '/new' }],
+      renderRedirect: async (info) => {
+        await Bun.sleep(5)
+        return `<a href="${info.to}">moved</a>`
+      },
+    },
+  )
+  await build(config)
+
+  expect(await readFile(path.join(TEST_DIR, 'docs', 'old.html'), 'utf-8')).toBe('<a href="/new">moved</a>')
+})
+
+test('build - fails when an async renderRedirect rejects', async () => {
+  const config = await redirectSite(
+    { 'new.md': '# New' },
+    {
+      redirects: [{ from: '/old', to: '/new' }],
+      renderRedirect: async () => {
+        throw new Error('stylesheet missing')
+      },
+    },
+  )
+
+  await expect(build(config)).rejects.toThrow('stylesheet missing')
+})
+
+test('build - plan.headings ids match the anchors in plan.html', async () => {
+  const config = await redirectSite(
+    {
+      'guide.md': [
+        '# Guide',
+        '## Before you start',
+        '## Ties &amp; *knots*',
+        '#### Not anchored',
+        '## Before you start',
+        '<h2 id="raw">Raw HTML</h2>',
+        '### Using `rope` safely',
+        'Mail [us](mailto:hi@example.com).',
+      ].join('\n\n'),
+    },
+    {},
+  )
+  const [plan] = await build(config)
+
+  expect(plan?.headings).toEqual([
+    { id: 'guide', text: 'Guide', level: 1 },
+    { id: 'before-you-start', text: 'Before you start', level: 2 },
+    { id: 'ties-knots', text: 'Ties & knots', level: 2 },
+    { id: 'before-you-start-1', text: 'Before you start', level: 2 },
+    { id: 'using-rope-safely', text: 'Using rope safely', level: 3 },
+  ])
+  for (const { id } of plan?.headings ?? []) {
+    expect(plan?.html).toContain(`id="${id}"`)
+  }
+})
+
+// Value: protects=plan.html still gets markdownOptions render flags, mailto obfuscation and UTM tagging after the switch to renderMarkdown; fails_when=createPlan drops a post-processing step or renderMarkdown renders tokens without md.options; why_new=no build-level test covered this chain, only the utils unit tests; seam=none; no_claim=heading extraction or UTM edge cases
+test('build - plan.html keeps markdownOptions, mailto obfuscation and UTM params', async () => {
+  const config = await redirectSite(
+    { 'contact.md': 'line one\nline two\n\nMail [us](mailto:hi@example.com) or see [docs](https://other.org/docs).' },
+    { markdownOptions: { breaks: true }, utmParams: { utm_source: 'site', utm_campaign: 'test' } },
+  )
+  const [plan] = await build(config)
+
+  expect(plan?.html).toContain('line one<br>')
+  expect(plan?.html).not.toContain('mailto:')
+  expect(plan?.html).toContain('data-email-link')
+  expect(plan?.html).toContain('https://other.org/docs?utm_source=site')
+})
+
 test('build - linkCheck.translationSiblings fails a template without the language switcher', async () => {
   const config = await redirectSite(
     { 'about.md': '# About', 'fr/about.md': '---\ntranslationOf: about\n---\n# À propos' },

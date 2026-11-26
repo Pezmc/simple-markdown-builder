@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test'
-import { createMarkdownRenderer } from './markdown.js'
+import { createMarkdownRenderer, renderMarkdown } from './markdown.js'
 
 test('createMarkdownRenderer - basic rendering', () => {
   const md = createMarkdownRenderer()
@@ -44,3 +44,31 @@ test('createMarkdownRenderer - trims leading/trailing hyphens from anchor IDs', 
   expect(result).not.toContain('id="-whats-happening-at-ropelabs"')
 })
 
+
+test('renderMarkdown - collects anchored headings as plain text in document order', () => {
+  const md = createMarkdownRenderer()
+  const { html, headings } = renderMarkdown(
+    md,
+    '# Intro\n\n## Q&amp;A: **"bold"** <em>raw</em> `code`\n\n#### Deep\n\n<h2 id="raw">Raw</h2>\n\n## Intro',
+  )
+  expect(headings).toEqual([
+    { id: 'intro', text: 'Intro', level: 1 },
+    { id: 'qa-bold-raw-code', text: 'Q&A: \u201cbold\u201d raw code', level: 2 },
+    { id: 'intro-1', text: 'Intro', level: 2 },
+  ])
+  for (const { id } of headings) {
+    expect(html).toContain(`id="${id}"`)
+  }
+  expect(html).toBe(md.render('# Intro\n\n## Q&amp;A: **"bold"** <em>raw</em> `code`\n\n#### Deep\n\n<h2 id="raw">Raw</h2>\n\n## Intro'))
+})
+
+test('renderMarkdown - keeps a space where a setext heading breaks lines', () => {
+  const { headings } = renderMarkdown(createMarkdownRenderer(), 'Line one\nline two\n===')
+  expect(headings[0]?.text).toBe('Line one line two')
+})
+
+test('renderMarkdown - skips headings with an empty anchor and spaces an inline <br>', () => {
+  const { html, headings } = renderMarkdown(createMarkdownRenderer(), '## ![Logo](logo.png)\n\n## a<br>b\n\n##')
+  expect(html).toContain('id=""')
+  expect(headings).toEqual([{ id: 'ab', text: 'a b', level: 2 }])
+})

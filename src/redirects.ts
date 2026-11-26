@@ -203,7 +203,7 @@ export async function writeRedirectStubs(
   await Promise.all(
     stubs.map(async (stub) => {
       const html = config.renderRedirect
-        ? config.renderRedirect(stub.info)
+        ? await config.renderRedirect(stub.info)
         : renderRedirectStub(stub.info, stub.canonical)
       await mkdir(path.dirname(stub.outputPath), { recursive: true })
       await writeFile(stub.outputPath, html)

@@ -178,3 +178,55 @@ test('build - passes custom front-matter keys through on plan.meta', async () =>
 
   expect(eyebrow).toBe('Welcome')
 })
+
+test('jsonLd and onPageRendered - receive the same alternates the hreflang tags use', async () => {
+  await writeContent('about.md', '# About')
+  await writeContent('fr/about.md', '---\ntranslationOf: about\n---\n# À propos')
+  await writeContent('404.md', '# Not found')
+
+  const seen = new Map<string, { jsonLd?: PageRenderContext; rendered?: PageRenderContext }>()
+  await build(
+    config({
+      jsonLd: (plan, context) => {
+        seen.set(plan.relativeOutput, { ...seen.get(plan.relativeOutput), jsonLd: context })
+        return undefined
+      },
+      onPageRendered: (html, plan, context) => {
+        seen.set(plan.relativeOutput, { ...seen.get(plan.relativeOutput), rendered: context })
+        return html
+      },
+    }),
+  )
+
+  const fr = seen.get('fr/about.html')
+  expect(fr?.rendered?.alternates).toEqual([
+    { lang: 'en', href: 'https://example.com/about' },
+    { lang: 'fr', href: 'https://example.com/fr/about' },
+    { lang: 'x-default', href: 'https://example.com/about' },
+  ])
+  expect(fr?.jsonLd).toBe(fr?.rendered)
+  const hreflangTags = [...(await readOutput('fr/about.html')).matchAll(/<link rel="alternate" href="([^"]+)" hreflang="([^"]+)"/g)]
+    .map(([, href, lang]) => ({ lang, href }))
+  expect(hreflangTags).toEqual(fr?.rendered?.alternates as { lang: string; href: string }[])
+  expect(seen.get('404.html')?.rendered?.alternates).toEqual([])
+})
+
+test('jsonLd - editing context.alternates does not change the hreflang tags', async () => {
+  await writeContent('about.md', '# About')
+  await writeContent('fr/about.md', '---\ntranslationOf: about\n---\n# À propos')
+
+  await build(
+    config({
+      jsonLd: (_plan, context) => {
+        const alternates = context.alternates as { lang: string; href: string }[]
+        alternates.pop()
+        if (alternates[0]) alternates[0].href = 'https://evil.example/'
+        return undefined
+      },
+    }),
+  )
+
+  const html = await readOutput('fr/about.html')
+  expect(html).toContain('hreflang="x-default"')
+  expect(html).not.toContain('evil.example')
+})

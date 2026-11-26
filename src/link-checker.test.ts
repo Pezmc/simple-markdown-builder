@@ -301,6 +301,7 @@ function translatedPair(): RenderPlan[] {
     outputPath: path.join(TEST_DIR, ...relativeOutput.split('/')),
     relativeOutput,
     html: '',
+    headings: [],
     meta: {
       title: '',
       description: '',
