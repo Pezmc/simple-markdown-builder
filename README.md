@@ -437,6 +437,7 @@ Also new and additive; existing configs and hooks work unchanged:
 - **`plan.headings`**: each page's h1–h3 markdown headings as `{ id, text, level }`, taken from the markdown token stream, so a table of contents no longer has to parse the rendered HTML. See [Build Hooks](#build-hooks).
 - **`alternates` in the hook context**: `onPageRendered` and `jsonLd` receive the page's hreflang alternates (with `x-default` last) as `context.alternates`, instead of calling `buildAlternateLinks` themselves.
 - **Async `renderRedirect`**: it may return a `Promise<string>`, and the builder awaits it. Before, a returned promise was passed straight to the file write and the build failed.
+- **New type exports**: `Heading` (the shape of each `plan.headings` entry) and `iAlternateLink` (each `alternates` entry).
 
 ### Changes in v3.1
 
