@@ -7,9 +7,26 @@ import { toAbsoluteUrl } from './template.js'
 
 const DEFAULT_LANG = 'en'
 
+// A page's group is its path with the language directory removed, so
+// `classes/index.md` and `fr/classes/index.md` pair up while `index.md` and
+// `classes/index.md` stay apart. A bare `translationOf` names a page in the
+// same directory; one containing `/` is a path from the content root (a
+// leading `/` is optional).
+function translationKey(plan: RenderPlan): string {
+  const name = plan.meta.translationOf ?? plan.meta.slug ?? 'page'
+  if (name.includes('/')) {
+    return name.replace(/^\/+/, '')
+  }
+  const dirs = path.posix.dirname(plan.relativeOutput).split('/').filter((dir) => dir !== '.')
+  if (dirs[0] === plan.meta.lang) {
+    dirs.shift()
+  }
+  return [...dirs, name].join('/')
+}
+
 export function groupByTranslation(plans: RenderPlan[]): Map<string, RenderPlan[]> {
   return plans.reduce((map, plan) => {
-    const key = plan.meta.translationOf ?? plan.meta.slug ?? 'page'
+    const key = translationKey(plan)
     const existing = map.get(key) ?? []
     existing.push(plan)
     map.set(key, existing)
@@ -21,8 +38,7 @@ export function resolveCanonicalRelative(
   plan: RenderPlan,
   groups: Map<string, RenderPlan[]>,
 ): string {
-  const groupKey = plan.meta.translationOf ?? plan.meta.slug ?? 'page'
-  const group = groups.get(groupKey) ?? [plan]
+  const group = groups.get(translationKey(plan)) ?? [plan]
   const defaultLang = plan.meta.lang ?? DEFAULT_LANG
   const english = group.find((entry) => entry.meta.lang === defaultLang)
   return english?.relativeOutput ?? plan.relativeOutput
@@ -34,8 +50,7 @@ export function buildAlternateLinks(
   baseUrl: string,
   defaultLang: string,
 ): iAlternateLink[] {
-  const groupKey = plan.meta.translationOf ?? plan.meta.slug ?? 'page'
-  const group = groups.get(groupKey) ?? [plan]
+  const group = groups.get(translationKey(plan)) ?? [plan]
   const links = group.map((entry) => {
     const normalizedPath = normalizeIndexUrl(stripHtmlExtension(entry.relativeOutput))
     return {

@@ -98,6 +98,8 @@ await ensureTranslations(config, 'content', false)
 await build(config)
 ```
 
+A translated page joins its source's group through `translationOf`. A bare value names a page in the same directory once the language directory is removed, so `fr/classes/index.md` with `translationOf: index` pairs with `classes/index.md`. A value containing `/` is a path from the content root, for translations that live in a different directory: `fr/infos/a-propos.md` with `translationOf: /about` pairs with `about.md`. `ensureTranslations` writes the bare form, which always matches because it mirrors the source's directory.
+
 ### Development Server
 
 ```typescript
@@ -133,7 +135,7 @@ await startDevServer(config, {
 
 ### Build Hooks
 
-`onPageRendered(html, plan, { plans, groups })` receives each page's rendered HTML and returns the HTML to write. `plans` is every page in the build and `groups` maps each translation group key (`translationOf`, else `slug`) to its pages, so the hook can add cross-page navigation. Pages render concurrently, so the hook must not depend on the order it is called in.
+`onPageRendered(html, plan, { plans, groups })` receives each page's rendered HTML and returns the HTML to write. `plans` is every page in the build and `groups` maps each translation group key (the page's path without its language directory, e.g. `classes/index`) to its pages, so the hook can add cross-page navigation. Pages render concurrently, so the hook must not depend on the order it is called in.
 
 `onPagesWritten(plans, outputDir)` runs after every page is written and before the link check, even when `skipLinkCheck` is set. Write extra files here, such as redirect stubs that the rewritten pages link to. Files written here are link-checked but stay out of the sitemap, which is built from `plans`.
 
@@ -300,6 +302,7 @@ These change the output of existing sites without any config change:
 - **x-default hreflang**: pages now emit `<link rel="alternate" hreflang="x-default">`. Every translation in a group points it at the default-language version, or the first language with a version when there is none (before, `buildAlternateLinks` pointed each page's x-default at the page itself).
 - **og:type and og:locale**: every page gets `og:type` (`website` unless `ogType` is set), `og:locale`, and `og:locale:alternate` for its translations.
 - **404 pages**: `404.html` and `<lang>/404.html` are now `noindex`, drop their canonical and hreflang tags, leave the sitemap, and log a warning for relative URLs. The dev server serves `404.html` for missing URLs instead of a plain "Not found".
+- **Translation groups follow the page's path**: hreflang alternates, canonical tags and sitemap alternates used to group pages on the bare slug, so every `index.md` (`index.md`, `classes/index.md`, `fr/classes/index.md`) landed in one group, as did `classes/beginner.md` and `workshops/beginner.md`. The homepage could list `/classes/` as an alternate. Pages now group on their path without the language directory (`classes/index`). To migrate: translated files written by `ensureTranslations` keep working unchanged. A hand-written `translationOf` that points at a page in a different directory needs the path form: `fr/cours/debutant.md` translating `classes/beginner.md` changes from `translationOf: beginner` to `translationOf: classes/beginner`. Hooks that look up `groups` by key must use the new path keys (`classes/index`, not `index`).
 
 ### Breaking Changes in v1.0
 

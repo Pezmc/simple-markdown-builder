@@ -286,3 +286,85 @@ test('buildAlternateLinks - without a default-language page, the group still agr
   )
   expect(xDefaults[0]).toBe(xDefaults[1])
 })
+
+function plan(relativeOutput: string, lang: string, meta: Partial<RenderPlan['meta']> = {}): RenderPlan {
+  return {
+    sourcePath: `/content/${relativeOutput.replace(/\.html$/, '.md')}`,
+    outputPath: `/docs/${relativeOutput}`,
+    relativeOutput,
+    html: '',
+    meta: {
+      title: 'Page',
+      description: 'Page',
+      slug: path.posix.basename(relativeOutput, '.html'),
+      lang,
+      output: relativeOutput,
+      ...meta,
+    },
+  }
+}
+
+// Every directory has an index.md and filenames repeat across directories,
+// so pages sharing a slug must still group apart by path.
+const nestedSite = [
+  plan('index.html', 'en'),
+  plan('classes/index.html', 'en'),
+  plan('classes/beginner.html', 'en'),
+  plan('workshops/beginner.html', 'en'),
+  plan('fr/index.html', 'fr', { translationOf: 'index' }),
+  plan('fr/classes/index.html', 'fr', { translationOf: 'index' }),
+  plan('fr/classes/debutant.html', 'fr', { translationOf: 'beginner' }),
+  plan('fr/infos/a-propos.html', 'fr', { translationOf: '/workshops/beginner' }),
+]
+
+test('groupByTranslation - groups on the path without the language directory', () => {
+  const groups = groupByTranslation(nestedSite)
+  const outputs = (key: string) => groups.get(key)?.map((entry) => entry.relativeOutput)
+
+  expect([...groups.keys()].sort()).toEqual([
+    'classes/beginner',
+    'classes/index',
+    'index',
+    'workshops/beginner',
+  ])
+  expect(outputs('index')).toEqual(['index.html', 'fr/index.html'])
+  expect(outputs('classes/index')).toEqual(['classes/index.html', 'fr/classes/index.html'])
+  expect(outputs('classes/beginner')).toEqual(['classes/beginner.html', 'fr/classes/debutant.html'])
+  expect(outputs('workshops/beginner')).toEqual(['workshops/beginner.html', 'fr/infos/a-propos.html'])
+})
+
+test('buildAlternateLinks - nested index pages only list their own translations', () => {
+  const groups = groupByTranslation(nestedSite)
+  const home = buildAlternateLinks(nestedSite[0]!, groups, 'https://example.com', 'en')
+  const classes = buildAlternateLinks(nestedSite[5]!, groups, 'https://example.com', 'en')
+
+  expect(home).toEqual([
+    { lang: 'en', href: 'https://example.com/' },
+    { lang: 'fr', href: 'https://example.com/fr/' },
+    { lang: 'x-default', href: 'https://example.com/' },
+  ])
+  expect(classes.filter((alt) => alt.lang !== 'x-default')).toEqual([
+    { lang: 'en', href: 'https://example.com/classes/' },
+    { lang: 'fr', href: 'https://example.com/fr/classes/' },
+  ])
+})
+
+test('resolveCanonicalRelative - picks the page itself, not a namesake elsewhere', () => {
+  const groups = groupByTranslation(nestedSite)
+  expect(resolveCanonicalRelative(nestedSite[1]!, groups)).toBe('classes/index.html')
+  expect(resolveCanonicalRelative(nestedSite[3]!, groups)).toBe('workshops/beginner.html')
+})
+
+test('writeSitemap - alternates pair nested pages with their own translations', async () => {
+  await writeSitemap(nestedSite, TEST_DIR, 'https://example.com', 'en')
+  const sitemap = await readFile(path.join(TEST_DIR, 'sitemap.xml'), 'utf-8')
+  const entry = (loc: string) =>
+    sitemap.split('<url>').find((row) => row.includes(`<loc>${loc}</loc>`)) ?? ''
+
+  expect(entry('https://example.com/')).toContain('href="https://example.com/fr/"')
+  expect(entry('https://example.com/')).not.toContain('classes')
+  expect(entry('https://example.com/workshops/beginner')).toContain(
+    'hreflang="fr" href="https://example.com/fr/infos/a-propos"',
+  )
+  expect(entry('https://example.com/workshops/beginner')).not.toContain('classes')
+})

@@ -586,3 +586,86 @@ test('build - a page sharing the 404 group key gets no 404 alternate', async () 
   expect(html).not.toContain('/fr/404')
   expect(await site.read('sitemap.xml')).toContain('<loc>https://example.com/docs/404</loc>')
 })
+
+test('build - pairs nested index pages and repeated filenames with their own translations', async () => {
+  const contentDir = path.join(TEST_DIR, 'content')
+  const outputDir = path.join(TEST_DIR, 'docs')
+  const templatePath = path.join(TEST_DIR, 'template.html')
+  const pages: Record<string, string> = {
+    'index.md': '# Home',
+    'classes/index.md': '# Classes',
+    'classes/beginner.md': '# Beginner class',
+    'workshops/beginner.md': '# Beginner workshop',
+    'fr/index.md': '---\ntranslationOf: index\n---\n# Accueil',
+    'fr/classes/index.md': '---\ntranslationOf: index\n---\n# Cours',
+    'fr/classes/beginner.md': '---\nslug: debutant\ntranslationOf: beginner\n---\n# Cours débutant',
+  }
+  for (const [file, body] of Object.entries(pages)) {
+    await mkdir(path.dirname(path.join(contentDir, file)), { recursive: true })
+    await writeFile(path.join(contentDir, file), body)
+  }
+  await writeFile(templatePath, '<html><head><title>{{TITLE}}</title></head><body>{{BODY}}</body></html>')
+
+  await build({
+    contentDir,
+    outputDir,
+    templatePath,
+    baseUrl: 'https://example.com',
+    skipLinkCheck: true,
+    defaultMeta: {
+      title: 'Test Site',
+      description: 'Test',
+      sidebarTitle: 'Test',
+      sidebarSummary: 'Test',
+      backLinkHref: '/',
+      backLinkLabel: 'Back',
+    },
+    translations: { targetLanguages: [], defaultLang: 'en', supportedLangs: ['en', 'fr'] },
+  })
+
+  const read = (file: string) => readFile(path.join(outputDir, file), 'utf-8')
+  const alternates = (html: string) =>
+    [...html.matchAll(/<link rel="alternate" href="([^"]+)" hreflang="([^"]+)"/g)].map(
+      ([, href, lang]) => `${lang} ${href}`,
+    )
+
+  const home = await read('index.html')
+  expect(alternates(home)).toEqual([
+    'en https://example.com/',
+    'fr https://example.com/fr/',
+    'x-default https://example.com/',
+  ])
+  expect(home).toContain('<link rel="canonical" href="https://example.com/" />')
+
+  const classes = await read('classes/index.html')
+  expect(alternates(classes)).toEqual([
+    'en https://example.com/classes/',
+    'fr https://example.com/fr/classes/',
+    'x-default https://example.com/classes/',
+  ])
+  expect(classes).toContain('<link rel="canonical" href="https://example.com/classes/" />')
+
+  const workshop = await read('workshops/beginner.html')
+  expect(alternates(workshop)).toEqual([
+    'en https://example.com/workshops/beginner',
+    'x-default https://example.com/workshops/beginner',
+  ])
+  expect(workshop).toContain('<link rel="canonical" href="https://example.com/workshops/beginner" />')
+
+  const frBeginner = await read('fr/classes/debutant.html')
+  expect(alternates(frBeginner)).toEqual([
+    'en https://example.com/classes/beginner',
+    'fr https://example.com/fr/classes/debutant',
+    'x-default https://example.com/classes/beginner',
+  ])
+  expect(frBeginner).toContain('<link rel="canonical" href="https://example.com/fr/classes/debutant" />')
+
+  const sitemap = await read('sitemap.xml')
+  const entry = (loc: string) =>
+    sitemap.split('<url>').find((row) => row.includes(`<loc>${loc}</loc>`)) ?? ''
+  expect(entry('https://example.com/')).not.toContain('classes')
+  expect(entry('https://example.com/classes/beginner')).toContain(
+    'hreflang="fr" href="https://example.com/fr/classes/debutant"',
+  )
+  expect(entry('https://example.com/workshops/beginner')).not.toContain('hreflang="fr"')
+})
