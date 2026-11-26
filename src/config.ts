@@ -141,3 +141,8 @@ export function getSupportedLangs(config: BuilderConfig, defaultLang: string): r
     : [defaultLang]
 }
 
+
+// Identity helper so `smb.config.ts` gets `BuilderConfig` type checking.
+export function defineConfig(config: BuilderConfig): BuilderConfig {
+  return config
+}

@@ -1,0 +1,80 @@
+# Reusable workflow: build a simple-markdown-builder site and deploy it to GitHub Pages.
+# Callers own the triggers, `permissions` and `concurrency`; those are not inherited.
+name: Pages
+
+on:
+  workflow_call:
+    inputs:
+      build-command:
+        description: Command that builds the site
+        type: string
+        default: bun run smb build
+      test-command:
+        description: Command run before the build; skipped when empty
+        type: string
+        default: ''
+      test-after-build:
+        description: Re-run the test command against the built site
+        type: boolean
+        default: false
+      output-dir:
+        description: Directory uploaded to GitHub Pages
+        type: string
+        default: docs
+      fetch-depth:
+        description: Checkout depth; 0 (full history) lets git-based lastmod dates work
+        type: number
+        default: 0
+      bun-version:
+        description: Bun version to install
+        type: string
+        default: latest
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # Install, test and build code never holds the deploy scopes.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: ${{ inputs.fetch-depth }}
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ inputs.bun-version }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run tests
+        if: inputs.test-command != ''
+        run: ${{ inputs.test-command }}
+
+      - name: Build site
+        run: ${{ inputs.build-command }}
+
+      - name: Re-run tests against the built site
+        if: inputs.test-command != '' && inputs.test-after-build
+        run: ${{ inputs.test-command }}
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ inputs.output-dir }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -4,7 +4,7 @@ export { startDevServer } from './dev-server.js'
 export { checkLinks } from './link-checker.js'
 export { writeSitemap, buildAlternateLinks, resolveCanonicalRelative } from './sitemap.js'
 export { ensureTranslations } from './translations.js'
-export { getDefaultLang, getSupportedLangs } from './config.js'
+export { defineConfig, getDefaultLang, getSupportedLangs } from './config.js'
 export { inferLangFromPath, sanitizeSlug } from './frontmatter.js'
 export { extractSlugFromPath, normalizePathSeparators, foldAccents, slugifyAnchor } from './utils.js'
 export type {
