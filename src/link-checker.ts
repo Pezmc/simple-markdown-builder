@@ -324,6 +324,20 @@ export async function checkLinks(
   console.log('Link check passed: all internal links resolve.')
 }
 
+// The site path of an absolute link on the site's own origin, compared with
+// URL semantics so "HTTPS://EXAMPLE.COM" and ":443" still match.
+function sameOriginPath(href: string, origin: string | null): string | null {
+  if (!origin || !/^https?:/i.test(href)) {
+    return null
+  }
+  try {
+    const url = new URL(href)
+    return url.origin === origin ? `${url.pathname}${url.search}${url.hash}` : null
+  } catch {
+    return null
+  }
+}
+
 // Every page whose translation group has other languages must link to each of
 // them with an <a>. hreflang <link> tags in the head do not count: they are
 // for search engines, and a template without {{LANGUAGE_SWITCHER}} still
@@ -344,10 +358,7 @@ async function findMissingSiblingLinks(
       const content = await readFile(plan.outputPath, 'utf-8')
       const linked = new Set<string>()
       for (const href of extractAnchorHrefs(content)) {
-        const local =
-          origin && (href === origin || href.startsWith(`${origin}/`))
-            ? href.slice(origin.length) || '/'
-            : href
+        const local = sameOriginPath(href, origin) ?? href
         if (isSkippableHref(local) || local.startsWith('#')) {
           continue
         }

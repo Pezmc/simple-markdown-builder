@@ -528,3 +528,15 @@ test('checkLinks - decodes reserved characters in asset path segments', async ()
   // An encoded slash stays inside its segment instead of becoming a separator.
   expect(message).toContain('- /img%2Fa%23b.png from ')
 })
+
+test('checkLinks - translationSiblings compares absolute links by origin, ignoring case and default port', async () => {
+  await mkdir(path.join(TEST_DIR, 'fr'), { recursive: true })
+  await writeFile(path.join(TEST_DIR, 'about.html'), '<a href="HTTPS://EXAMPLE.COM/fr/about">FR</a>')
+  await writeFile(path.join(TEST_DIR, 'fr', 'about.html'), '<a href="https://example.com:443/about">EN</a>')
+
+  await checkLinks(TEST_DIR, {
+    linkCheck: { translationSiblings: true },
+    translationGroups: new Map([['about', translatedPair()]]),
+    baseUrl: 'https://example.com',
+  })
+})
