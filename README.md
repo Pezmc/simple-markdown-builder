@@ -286,7 +286,7 @@ After:
 
 ## Deploying to GitHub Pages
 
-This repo ships a reusable workflow that installs dependencies, runs your tests, builds the site and deploys it to GitHub Pages. A site's whole deploy workflow is the caller below. The site must depend on `simple-markdown-builder` `^3.1.0` so `bunx smb` finds the local bin; without it, `bunx` falls back to the unrelated `smb` package on npm (a security placeholder) and the build fails. The repo is public, so callers need no Actions access setting.
+This repo ships a reusable workflow that installs dependencies, runs your tests, builds the site and deploys it to GitHub Pages. A site's whole deploy workflow is the caller below. The site must depend on `simple-markdown-builder` `^3.1.0` so the workflow's `bun run smb` finds the local bin. The repo is public, so callers need no Actions access setting.
 
 Triggers, `permissions` and `concurrency` are not inherited by a called workflow, so they stay in the caller. Reference the workflow by a release tag (`v3.1.0` is the first release with the CLI and this workflow), not `@main`, so a change here can't break a site's deploy until it bumps the tag.
 
@@ -322,7 +322,7 @@ jobs:
     uses: Pezmc/simple-markdown-builder/.github/workflows/pages.yml@v3.1.0
 ```
 
-That caller runs `bunx smb build` and uploads `docs`. A site with tests passes them as inputs, for example:
+That caller runs `bun run smb build` and uploads `docs`. The build job runs with `contents: read` only; just the deploy job gets `pages: write` and `id-token: write`. A site with tests passes them as inputs, for example:
 
 ```yaml
 jobs:
@@ -335,7 +335,7 @@ jobs:
 
 Inputs, all optional:
 
-- `build-command` - Builds the site (default: `bunx smb build`)
+- `build-command` - Builds the site (default: `bun run smb build`, which runs the locally installed bin and fails if it is missing rather than fetching a package from npm)
 - `test-command` - Runs before the build; skipped when empty (default: empty)
 - `test-after-build` - Re-run `test-command` against the built site (default: `false`)
 - `output-dir` - Directory uploaded to Pages; match the config's `outputDir` (default: `docs`)

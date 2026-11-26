@@ -57,10 +57,10 @@ function parseCommandArgs<T extends keyof typeof commandOptions>(command: T, arg
 }
 
 function parsePort(value: string | undefined, env: NodeJS.ProcessEnv): number {
-  const raw = value ?? env.PORT
-  if (raw === undefined || raw === '') return DEFAULT_PORT
+  const raw = value ?? (env.PORT || undefined)
+  if (raw === undefined) return DEFAULT_PORT
   const port = Number(raw)
-  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+  if (!/^\d+$/.test(raw) || port > 65535) {
     throw new CliError(`Invalid port: ${raw}`)
   }
   return port
@@ -106,6 +106,9 @@ export async function loadConfig(configPath: string, cwd: string = process.cwd()
   if (mod.default === undefined) {
     throw new CliError(`Config file has no default export: ${absolutePath}`)
   }
+  if (typeof mod.default !== 'object' || mod.default === null) {
+    throw new CliError(`Config file must default-export a config object: ${absolutePath}`)
+  }
   return mod.default as BuilderConfig
 }
 
@@ -130,8 +133,8 @@ export async function run(argv: readonly string[]): Promise<void> {
   }
 
   const { startDevServer } = await import('./dev-server.js')
-  // `clean` goes to the dev server, not the config, so rebuilds on change don't wipe the output.
-  await startDevServer(config, { port: args.port, clean: args.clean || config.clean })
+  // Clean once at start; `clean: false` in the config stops every rebuild on change from wiping the output.
+  await startDevServer({ ...config, clean: false }, { port: args.port, clean: args.clean || config.clean })
 }
 
 if (import.meta.main) {

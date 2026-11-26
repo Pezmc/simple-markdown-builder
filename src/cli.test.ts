@@ -1,4 +1,5 @@
 import { test, expect, describe } from 'bun:test'
+import { existsSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import { CliError, loadConfig, parseCliArgs } from './cli.js'
 import { defineConfig } from './index.js'
@@ -41,6 +42,12 @@ describe('parseCliArgs', () => {
   test('rejects an invalid port', () => {
     expect(() => parseCliArgs(['dev', '--port', 'abc'], {})).toThrow(CliError)
     expect(() => parseCliArgs(['dev'], { PORT: '99999' })).toThrow('Invalid port: 99999')
+    expect(() => parseCliArgs(['dev', '--port', ''], { PORT: '5000' })).toThrow('Invalid port: ')
+    expect(() => parseCliArgs(['dev', '--port', '1e3'], {})).toThrow('Invalid port: 1e3')
+  })
+
+  test('an empty $PORT falls back to 4173', () => {
+    expect(parseCliArgs(['dev'], { PORT: '' })).toMatchObject({ port: 4173 })
   })
 
   test('rejects an unknown command', () => {
@@ -76,6 +83,12 @@ describe('loadConfig', () => {
   test('errors on a config without a default export', async () => {
     await expect(loadConfig(path.join(FIXTURES, 'configs/no-default.ts'))).rejects.toThrow('no default export')
   })
+
+  test('errors on a default export that is not a config object', async () => {
+    await expect(loadConfig(path.join(FIXTURES, 'configs/function-default.ts'))).rejects.toThrow(
+      'must default-export a config object',
+    )
+  })
 })
 
 test('defineConfig returns its argument', () => {
@@ -104,5 +117,14 @@ describe('smb binary', () => {
       expect(stderr).toContain(message)
       expect(stderr.split('\n')).toHaveLength(1)
     }
+  })
+
+  test('build renders the fixture site', () => {
+    const cwd = path.join(FIXTURES, 'site')
+    rmSync(path.join(cwd, 'docs'), { recursive: true, force: true })
+    const result = Bun.spawnSync(['bun', CLI, 'build'], { cwd })
+    expect(result.exitCode).toBe(0)
+    expect(existsSync(path.join(cwd, 'docs/index.html'))).toBe(true)
+    expect(existsSync(path.join(cwd, 'docs/about.html'))).toBe(true)
   })
 })

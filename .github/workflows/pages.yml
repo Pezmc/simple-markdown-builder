@@ -8,7 +8,7 @@ on:
       build-command:
         description: Command that builds the site
         type: string
-        default: bunx smb build
+        default: bun run smb build
       test-command:
         description: Command run before the build; skipped when empty
         type: string
@@ -33,10 +33,14 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Install, test and build code never holds the deploy scopes.
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: ${{ inputs.fetch-depth }}
+          persist-credentials: false
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -64,6 +68,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
