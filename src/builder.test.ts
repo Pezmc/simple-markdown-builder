@@ -376,7 +376,8 @@ function git(cwd: string, args: string[], date?: string) {
   execFileSync('git', ['-c', 'commit.gpgsign=false', '-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], {
     cwd,
     stdio: 'ignore',
-    env: { ...process.env, ...(date ? { GIT_COMMITTER_DATE: date, GIT_AUTHOR_DATE: date } : {}) },
+    // Isolated from the developer's git config (hooks, templates, default branch).
+    env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1', ...(date ? { GIT_COMMITTER_DATE: date, GIT_AUTHOR_DATE: date } : {}) },
   })
 }
 
@@ -471,7 +472,9 @@ test('build - robots writes robots.txt and regenerates its own file', async () =
   await build(config)
   await build(config)
   const robots = await site.read('robots.txt')
-  expect(robots).toContain('Allow: /\nDisallow: /secret$\nDisallow: /secret.html$\nDisallow: /drafts/')
+  // noindex pages stay crawlable so crawlers can see their noindex tag.
+  expect(robots).toContain('Allow: /\nDisallow: /drafts/\n')
+  expect(robots).not.toContain('secret')
   expect(robots).toContain('Sitemap: https://example.com/sitemap.xml')
 })
 
@@ -484,6 +487,29 @@ test('build - robots refuses to overwrite a hand-written robots.txt', async () =
   expect(await site.read('robots.txt')).toBe('User-agent: *\nDisallow:\n')
   await build(site.config)
   expect(await site.read('robots.txt')).toBe('User-agent: *\nDisallow:\n')
+})
+
+test('build - robots refuses before clean deletes any HTML', async () => {
+  const site = await seoSite({ 'index.md': '# Home' })
+  seoRoots.push(site.root)
+  await mkdir(site.outputDir, { recursive: true })
+  await writeFile(path.join(site.outputDir, 'robots.txt'), 'User-agent: *\n')
+  await writeFile(path.join(site.outputDir, 'old.html'), '<p>published</p>')
+  await expect(build({ ...site.config, robots: true, clean: true })).rejects.toThrow('was not generated')
+  expect(await site.read('old.html')).toBe('<p>published</p>')
+})
+
+test('build - robots refuses a hand-written robots.txt copied in by onPagesWritten', async () => {
+  const site = await seoSite({ 'index.md': '# Home' })
+  seoRoots.push(site.root)
+  await expect(
+    build({
+      ...site.config,
+      robots: true,
+      onPagesWritten: (_plans, outputDir) => writeFile(path.join(outputDir, 'robots.txt'), 'User-agent: *\n'),
+    }),
+  ).rejects.toThrow('was not generated')
+  expect(await site.read('robots.txt')).toBe('User-agent: *\n')
 })
 
 test('build - 404 pages are noindex, uncanonical and out of the sitemap and hreflang', async () => {

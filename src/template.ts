@@ -71,8 +71,11 @@ function validateTemplatePlaceholders(template: string, templatePath: string): v
   }
 }
 
+// Open Graph wants language_TERRITORY; a bare language takes its likely
+// region from CLDR (en -> en_US, fr -> fr_FR, pt-br -> pt_BR).
 function toOgLocale(lang: string): string {
-  return lang.replace(/-/g, '_')
+  const locale = new Intl.Locale(lang).maximize()
+  return locale.region ? `${locale.language}_${locale.region}` : locale.language
 }
 
 function generateHeadTags(
@@ -99,10 +102,13 @@ function generateHeadTags(
   tags.push(`    <meta property="og:title" content="${escapeHtml(meta.title)}" />`)
   tags.push(`    <meta property="og:description" content="${escapeHtml(meta.description)}" />`)
   tags.push(`    <meta property="og:locale" content="${escapeHtml(toOgLocale(lang))}" />`)
-  for (const alt of alternates ?? []) {
-    if (alt.lang !== 'x-default' && alt.lang !== lang) {
-      tags.push(`    <meta property="og:locale:alternate" content="${escapeHtml(toOgLocale(alt.lang))}" />`)
-    }
+  const altLocales = new Set(
+    (alternates ?? [])
+      .filter((alt) => alt.lang !== 'x-default' && alt.lang !== lang)
+      .map((alt) => toOgLocale(alt.lang)),
+  )
+  for (const altLocale of altLocales) {
+    tags.push(`    <meta property="og:locale:alternate" content="${escapeHtml(altLocale)}" />`)
   }
 
   // ogImage handling with warning

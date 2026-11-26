@@ -27,7 +27,12 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
 
   const contentDir = path.resolve(config.contentDir ?? 'content')
   const outputDir = path.resolve(config.outputDir ?? 'docs')
-  
+
+  // Before anything changes output, content or spends translation quota.
+  if (config.robots) {
+    await assertRobotsWritable(outputDir)
+  }
+
   // Clean HTML files if requested
   if (config.clean) {
     await cleanHtmlFiles(outputDir)
@@ -46,10 +51,6 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
   if (markdownFiles.length === 0) {
     logWarning('No markdown files found in content/.')
     return []
-  }
-
-  if (config.robots) {
-    await assertRobotsWritable(outputDir)
   }
 
   const dates = config.lastmod === 'git' ? await gitLastModifiedDates(contentDir) : undefined
@@ -109,7 +110,9 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
   await writeSitemap(plans, outputDir, config.baseUrl, defaultLang, hreflangGroups)
 
   if (config.robots) {
-    await writeRobots(plans, outputDir, config.baseUrl, config.robots)
+    // Again here: onPagesWritten may have copied a hand-written robots.txt in.
+    await assertRobotsWritable(outputDir)
+    await writeRobots(outputDir, config.baseUrl, config.robots)
   }
 
   // Check links unless skipped

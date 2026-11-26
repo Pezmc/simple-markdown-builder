@@ -2,9 +2,8 @@ import { execFile } from 'node:child_process'
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import type { RenderPlan, RobotsConfig } from './config.js'
-import { isBooleanEnabled } from './frontmatter.js'
-import { logWarning, normalizeIndexUrl, normalizePathSeparators, stripHtmlExtension } from './utils.js'
+import type { RobotsConfig } from './config.js'
+import { logWarning, normalizePathSeparators } from './utils.js'
 import { toAbsoluteUrl } from './template.js'
 
 const execFileAsync = promisify(execFile)
@@ -41,7 +40,8 @@ export async function gitLastModifiedDates(
       '-c',
       'core.quotePath=false',
       'log',
-      '--format=%x01%cs',
+      '--format=%x01%cd',
+      '--date=short',
       '--name-only',
       '--relative',
       '--',
@@ -56,14 +56,21 @@ export async function gitLastModifiedDates(
   }
 }
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+
+// Keeps each file's latest date: log order is not strictly by date (clock skew,
+// merged branches). Paths are NFC, as git prints them on macOS.
 export function parseGitLog(stdout: string): Map<string, string> {
   const dates = new Map<string, string>()
   for (const commit of stdout.split('\x01')) {
-    const [date, ...files] = commit.split('\n')
-    if (!date) continue
+    const [rawDate, ...files] = commit.split('\n')
+    const date = rawDate?.trim() ?? ''
+    if (!ISO_DATE.test(date)) continue
     for (const file of files) {
-      if (file && !dates.has(file)) {
-        dates.set(file, date.trim())
+      const key = file.normalize('NFC')
+      const existing = dates.get(key)
+      if (file && (!existing || date > existing)) {
+        dates.set(key, date)
       }
     }
   }
@@ -75,7 +82,8 @@ export function lastModifiedFor(
   contentDir: string,
   sourcePath: string,
 ): string | undefined {
-  return dates?.get(normalizePathSeparators(path.relative(contentDir, sourcePath)))
+  // A file created with a decomposed name (é as e + accent) is stored that way on disk.
+  return dates?.get(normalizePathSeparators(path.relative(contentDir, sourcePath)).normalize('NFC'))
 }
 
 const ABSOLUTE_OR_ROOT = /^(?:[a-z][a-z0-9+.-]*:|\/|#)/i
@@ -84,8 +92,8 @@ const ABSOLUTE_OR_ROOT = /^(?:[a-z][a-z0-9+.-]*:|\/|#)/i
 // it resolves against that URL and breaks at any other depth.
 export function findRelativeUrls(html: string): string[] {
   const found: string[] = []
-  for (const match of html.matchAll(/\s(href|src|srcset)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
-    const value = (match[2] ?? match[3] ?? '').trim()
+  for (const match of html.matchAll(/\s(href|src|srcset)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi)) {
+    const value = (match[2] ?? match[3] ?? match[4] ?? '').trim()
     const urls =
       match[1]!.toLowerCase() === 'srcset'
         ? value.split(',').map((candidate) => candidate.trim().split(/\s+/)[0] ?? '')
@@ -129,32 +137,15 @@ export async function assertRobotsWritable(outputDir: string): Promise<void> {
   }
 }
 
-export function renderRobots(
-  plans: readonly RenderPlan[],
-  baseUrl: string,
-  robots: true | RobotsConfig,
-): string {
-  // Disallow matches by prefix, so generated lines end in `$` to block only the
-  // page itself, not a directory under it or a sibling sharing its prefix.
-  const pageRules = plans
-    .filter((plan) => isBooleanEnabled(plan.meta.noindex))
-    .sort((a, b) => a.relativeOutput.localeCompare(b.relativeOutput))
-    .flatMap((plan) => {
-      const clean = `/${normalizeIndexUrl(stripHtmlExtension(plan.relativeOutput))}`
-      const html = `/${plan.relativeOutput}`
-      return clean === html ? [clean] : [clean, html]
-    })
-    .map((urlPath) => `Disallow: ${urlPath}$`)
-  const extraRules = (robots === true ? [] : (robots.disallow ?? [])).map(
-    (urlPath) => `Disallow: ${urlPath}`,
-  )
-
+// noindex pages are deliberately not disallowed: a crawler blocked from a
+// page never sees its noindex tag, so a linked URL can stay in search results.
+export function renderRobots(baseUrl: string, robots: true | RobotsConfig): string {
+  const rules = (robots === true ? [] : (robots.disallow ?? [])).map((urlPath) => `Disallow: ${urlPath}`)
   return [
     ROBOTS_MARKER,
     'User-agent: *',
     'Allow: /',
-    ...pageRules,
-    ...extraRules,
+    ...rules,
     '',
     `Sitemap: ${toAbsoluteUrl('sitemap.xml', baseUrl)}`,
     '',
@@ -162,12 +153,11 @@ export function renderRobots(
 }
 
 export async function writeRobots(
-  plans: readonly RenderPlan[],
   outputDir: string,
   baseUrl: string,
   robots: true | RobotsConfig,
 ): Promise<void> {
   const robotsPath = path.join(outputDir, 'robots.txt')
-  await writeFile(robotsPath, renderRobots(plans, baseUrl, robots))
+  await writeFile(robotsPath, renderRobots(baseUrl, robots))
   console.log(`Generated ${path.relative(process.cwd(), robotsPath)}`)
 }

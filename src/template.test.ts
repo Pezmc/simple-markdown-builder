@@ -265,16 +265,26 @@ test('renderTemplate - emits the x-default hreflang', async () => {
 test('renderTemplate - emits og:type, og:locale and og:locale:alternate', async () => {
   const result = await renderSeo(seoMeta({ lang: 'fr', output: 'fr/about.html' }), EN_FR_ALTERNATES)
   expect(result).toContain('<meta property="og:type" content="website" />')
-  expect(result).toContain('<meta property="og:locale" content="fr" />')
-  expect(result).toContain('<meta property="og:locale:alternate" content="en" />')
-  expect(result).not.toContain('og:locale:alternate" content="fr"')
-  expect(result).not.toContain('og:locale:alternate" content="x-default"')
+  expect(result).toContain('<meta property="og:locale" content="fr_FR" />')
+  expect(result).toContain('<meta property="og:locale:alternate" content="en_US" />')
+  expect(result).not.toContain('og:locale:alternate" content="fr_FR"')
+  expect(result.match(/og:locale:alternate/g)).toHaveLength(1)
 })
 
-test('renderTemplate - og:type comes from front-matter ogType and locales use underscores', async () => {
+test('renderTemplate - og:type comes from front-matter ogType and locales are language_TERRITORY', async () => {
   const result = await renderSeo(seoMeta({ ogType: 'article', lang: 'pt-br' }))
   expect(result).toContain('<meta property="og:type" content="article" />')
-  expect(result).toContain('<meta property="og:locale" content="pt_br" />')
+  expect(result).toContain('<meta property="og:locale" content="pt_BR" />')
+  expect(await renderSeo(seoMeta({ lang: 'nl' }))).toContain('<meta property="og:locale" content="nl_NL" />')
+})
+
+test('renderTemplate - og:locale:alternate lists each locale once', async () => {
+  const result = await renderSeo(seoMeta(), [
+    { lang: 'en', href: 'https://example.com/a' },
+    { lang: 'fr', href: 'https://example.com/fr/a' },
+    { lang: 'fr', href: 'https://example.com/fr/b' },
+  ])
+  expect(result.match(/og:locale:alternate" content="fr_FR"/g)).toHaveLength(1)
 })
 
 test('renderTemplate - og:image dimensions follow og:image only when set', async () => {
