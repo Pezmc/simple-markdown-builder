@@ -5,40 +5,138 @@ import { normalizeIndexUrl, stripHtmlExtension, logWarning, logError } from './u
 
 const DEFAULT_LANG = 'en'
 
-let templateCache: Map<string, string> = new Map()
-let homepageTemplateCache: Map<string, string> = new Map()
+// Expanded templates, keyed by resolved path. Promises, so pages rendering
+// concurrently share one read.
+const templateCache: Map<string, Promise<string>> = new Map()
+const templateFiles: Set<string> = new Set()
 
 export function clearTemplateCache(): void {
   templateCache.clear()
-  homepageTemplateCache.clear()
+  templateFiles.clear()
 }
 
-export async function loadTemplate(templatePath: string): Promise<string> {
+// Every template and partial file read (or attempted) since the cache was
+// last cleared, so the dev server can rebuild when one changes.
+export function getTemplateFiles(): readonly string[] {
+  return [...templateFiles]
+}
+
+export function loadTemplate(templatePath: string): Promise<string> {
   const resolved = path.resolve(templatePath)
-  const cached = templateCache.get(resolved)
-  if (cached) {
-    return cached
+  let cached = templateCache.get(resolved)
+  if (!cached) {
+    cached = expandIncludes(resolved, []).then((template) => {
+      validateSections(template, templatePath)
+      return template
+    })
+    templateCache.set(resolved, cached)
   }
-  const content = await readFile(resolved, 'utf-8')
-  templateCache.set(resolved, content)
-  return content
+  return cached
 }
 
-export async function loadHomepageTemplate(
-  homepageTemplatePath: string | undefined,
-  fallbackTemplatePath: string,
-): Promise<string> {
-  if (!homepageTemplatePath) {
-    return loadTemplate(fallbackTemplatePath)
+const INCLUDE = /\{\{>\s*(\S+?)\s*\}\}/g
+
+async function expandIncludes(filePath: string, chain: readonly string[]): Promise<string> {
+  const here = [...chain, filePath]
+  const describe = (): string => here.map((file) => path.relative(process.cwd(), file)).join(' -> ')
+  if (chain.includes(filePath)) {
+    throw new Error(`Template include cycle: ${describe()}`)
   }
-  const resolved = path.resolve(homepageTemplatePath)
-  const cached = homepageTemplateCache.get(resolved)
-  if (cached) {
-    return cached
+  templateFiles.add(filePath)
+  let content: string
+  try {
+    content = await readFile(filePath, 'utf-8')
+  } catch (error) {
+    if (chain.length > 0 && (error as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw new Error(`Template include not found: ${describe()}`)
+    }
+    throw error
   }
-  const content = await readFile(resolved, 'utf-8')
-  homepageTemplateCache.set(resolved, content)
-  return content
+  const includes = [...content.matchAll(INCLUDE)]
+  const expanded = await Promise.all(
+    includes.map((match) => expandIncludes(path.resolve(path.dirname(filePath), match[1]!), here)),
+  )
+  let index = 0
+  return content.replace(INCLUDE, () => expanded[index++]!)
+}
+
+const PLACEHOLDER = /\{\{([A-Z][A-Z0-9_]*)\}\}/g
+const SECTION_TAG = /\{\{([#/])([A-Z][A-Z0-9_]*)\}\}/g
+
+export const BUILT_IN_PLACEHOLDERS: ReadonlySet<string> = new Set([
+  'TITLE',
+  'DESCRIPTION',
+  'LANGUAGE_SWITCHER',
+  'LANG',
+  'BACK_LINK_HREF',
+  'BACK_LINK_LABEL',
+  'SIDEBAR_TITLE',
+  'SIDEBAR_SUMMARY',
+  'YEAR',
+  'UPDATED',
+  'UPDATED_ISO',
+  'BODY',
+])
+
+// heroImage -> HERO_IMAGE. Keys that do not make a valid name return undefined.
+export function toPlaceholderName(key: string): string | undefined {
+  const name = key.replace(/([a-z0-9])([A-Z])/g, '$1_$2').replace(/-/g, '_').toUpperCase()
+  return /^[A-Z][A-Z0-9_]*$/.test(name) ? name : undefined
+}
+
+// Names a template refers to through placeholders or sections.
+export function templatePlaceholderNames(template: string): Set<string> {
+  const names = new Set<string>()
+  for (const match of template.matchAll(PLACEHOLDER)) names.add(match[1]!)
+  for (const match of template.matchAll(SECTION_TAG)) names.add(match[2]!)
+  return names
+}
+
+function validateSections(template: string, templatePath: string): void {
+  const stack: string[] = []
+  for (const [, kind, name] of template.matchAll(SECTION_TAG)) {
+    if (kind === '#') {
+      stack.push(name!)
+      continue
+    }
+    const open = stack.pop()
+    if (open === undefined) {
+      throw new Error(`Template ${templatePath} closes section ${name} that was never opened`)
+    }
+    if (open !== name) {
+      throw new Error(`Template ${templatePath} closes section ${name} while section ${open} is open`)
+    }
+  }
+  if (stack.length > 0) {
+    throw new Error(`Template ${templatePath} never closes section ${stack[stack.length - 1]}`)
+  }
+}
+
+// Structure was checked at load, so tags here are balanced.
+function renderSections(template: string, values: ReadonlyMap<string, string>): string {
+  const keep: boolean[] = []
+  let output = ''
+  let last = 0
+  for (const match of template.matchAll(SECTION_TAG)) {
+    if (keep.every(Boolean)) output += template.slice(last, match.index)
+    last = match.index + match[0].length
+    if (match[1] === '#') {
+      keep.push(Boolean(values.get(match[2]!)))
+    } else {
+      keep.pop()
+    }
+  }
+  return output + template.slice(last)
+}
+
+function metaPlaceholderValues(meta: PageMeta): Map<string, string> {
+  const values = new Map<string, string>()
+  for (const [key, value] of Object.entries(meta)) {
+    const name = toPlaceholderName(key)
+    if (!name || value === undefined) continue
+    values.set(name, typeof value === 'boolean' ? (value ? 'true' : '') : escapeHtml(value))
+  }
+  return values
 }
 
 export function escapeHtml(text: string | undefined): string {
@@ -186,9 +284,9 @@ export async function renderTemplate(
   canonicalRelative?: string,
   options: RenderOptions = {},
 ): Promise<string> {
-  const template = isHomepage && homepageTemplatePath
-    ? await loadHomepageTemplate(homepageTemplatePath, templatePath)
-    : await loadTemplate(templatePath)
+  const template = await loadTemplate(
+    isHomepage && homepageTemplatePath ? homepageTemplatePath : templatePath,
+  )
   
   validateTemplatePlaceholders(template, templatePath)
 
@@ -204,19 +302,30 @@ export async function renderTemplate(
     ? renderLanguageSwitcher(meta.lang ?? DEFAULT_LANG, alternates)
     : ''
 
-  let rendered = template
-    .replace(/\{\{TITLE\}\}/g, escapeHtml(meta.title))
-    .replace(/\{\{DESCRIPTION\}\}/g, escapeHtml(meta.description))
-    .replace(/\{\{LANGUAGE_SWITCHER\}\}/g, languageSwitcher)
-    .replace(/\{\{LANG\}\}/g, meta.lang ?? DEFAULT_LANG)
-    .replace(/\{\{BACK_LINK_HREF\}\}/g, escapeHtml(meta.backLinkHref))
-    .replace(/\{\{BACK_LINK_LABEL\}\}/g, escapeHtml(meta.backLinkLabel))
-    .replace(/\{\{SIDEBAR_TITLE\}\}/g, escapeHtml(meta.sidebarTitle))
-    .replace(/\{\{SIDEBAR_SUMMARY\}\}/g, escapeHtml(meta.sidebarSummary))
-    .replace(/\{\{YEAR\}\}/g, new Date().getFullYear().toString())
-    .replace(/\{\{UPDATED\}\}/g, () => escapeHtml(formatUpdated(meta.lastModified, meta.lang ?? DEFAULT_LANG)))
-    .replace(/\{\{UPDATED_ISO\}\}/g, meta.lastModified ?? '')
-    .replace(/\{\{BODY\}\}/g, body)
+  const lang = meta.lang ?? DEFAULT_LANG
+  const values = metaPlaceholderValues(meta)
+  // Built-ins win over front-matter keys of the same name.
+  const builtIns: Record<string, string> = {
+    TITLE: escapeHtml(meta.title),
+    DESCRIPTION: escapeHtml(meta.description),
+    LANGUAGE_SWITCHER: languageSwitcher,
+    LANG: lang,
+    BACK_LINK_HREF: escapeHtml(meta.backLinkHref),
+    BACK_LINK_LABEL: escapeHtml(meta.backLinkLabel),
+    SIDEBAR_TITLE: escapeHtml(meta.sidebarTitle),
+    SIDEBAR_SUMMARY: escapeHtml(meta.sidebarSummary),
+    YEAR: new Date().getFullYear().toString(),
+    UPDATED: escapeHtml(formatUpdated(meta.lastModified, lang)),
+    UPDATED_ISO: meta.lastModified ?? '',
+    BODY: body,
+  }
+  for (const [name, value] of Object.entries(builtIns)) values.set(name, value)
+
+  // One pass, so neither the body nor any inserted value is expanded again.
+  let rendered = renderSections(template, values).replace(
+    PLACEHOLDER,
+    (_, name: string) => values.get(name) ?? '',
+  )
 
   // Automatically inject all head tags before </head>
   const headEndMatch = rendered.match(/<\/head>/i)

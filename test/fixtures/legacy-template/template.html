@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="{{LANG}}">
+<head>
+  <meta charset="utf-8" />
+  <title>{{TITLE}} | {{SIDEBAR_TITLE}}</title>
+  <script>const cfg = { a: { b: 1 } }; const t = `{{lower}} {{ TITLE }} {{Title}}`;</script>
+</head>
+<body>
+  <header>{{LANGUAGE_SWITCHER}}</header>
+  <a href="{{BACK_LINK_HREF}}">{{BACK_LINK_LABEL}}</a>
+  <aside><h2>{{SIDEBAR_TITLE}}</h2><p>{{SIDEBAR_SUMMARY}}</p><p>{{DESCRIPTION}}</p></aside>
+  <main>{{BODY}}</main>
+  <!-- {{#lower}}not a section{{/lower}} {{>}} {{ }} {{}} {{{TITLE}}} -->
+  <footer>&copy; {{YEAR}} <span>Updated <time datetime="{{UPDATED_ISO}}">{{UPDATED}}</time></span></footer>
+</body>
+</html>

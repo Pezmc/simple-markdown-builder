@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>A &lt;Title&gt; &amp; &quot;more&quot; | Side</title>
+  <script>const cfg = { a: { b: 1 } }; const t = `{{lower}} {{ TITLE }} {{Title}}`;</script>
+    <meta name="description" content="It&#039;s described" />
+    <link rel="canonical" href="https://example.com/fr/page" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://example.com/fr/page" />
+    <meta property="og:title" content="A &lt;Title&gt; &amp; &quot;more&quot;" />
+    <meta property="og:description" content="It&#039;s described" />
+    <meta property="og:locale" content="fr_FR" />
+    <meta property="og:locale:alternate" content="en_US" />
+    <meta property="og:image" content="https://example.com/img/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="A &lt;Title&gt; &amp; &quot;more&quot;" />
+    <meta name="twitter:description" content="It&#039;s described" />
+    <link rel="alternate" href="https://example.com/page" hreflang="en" />
+    <link rel="alternate" href="https://example.com/fr/page" hreflang="fr" />
+    <link rel="alternate" href="https://example.com/page" hreflang="x-default" />
+    <script type="application/ld+json">{"@type":"WebPage","name":"\u003c/script>"}</script>
+</head>
+<body>
+  <header><nav class="smb-lang-switch" aria-label="Language"><a href="/page" hreflang="en" class="smb-lang-switch__item">EN</a><span class="smb-lang-switch__item is-active" aria-current="page">FR</span></nav></header>
+  <a href="/back?a=1&amp;b=2">Back</a>
+  <aside><h2>Side</h2><p>Summary</p><p>It&#039;s described</p></aside>
+  <main><p>{{TITLE}} {{#EYEBROW}}x{{/EYEBROW}} {{> partials/head.html}} {{EYEBROW}}</p></main>
+  <!-- {{#lower}}not a section{{/lower}} {{>}} {{ }} {{}} {A &lt;Title&gt; &amp; &quot;more&quot;} -->
+  <footer>&copy; 2026 <span>Updated <time datetime="2026-11-01">1 novembre 2026</time></span></footer>
+</body>
+</html>

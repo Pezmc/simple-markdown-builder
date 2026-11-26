@@ -1020,3 +1020,151 @@ test('build - 404 pages get no translation fallback and are not held to the sibl
   const nl404 = await readFile(path.join(docs, 'nl', '404.html'), 'utf-8').then(() => true, () => false)
   expect(nl404).toBe(false)
 })
+
+async function templateFeatureSite(
+  template: string,
+  pages: Record<string, string>,
+  defaultMeta: Record<string, string> = {},
+): Promise<BuilderConfig> {
+  const contentDir = path.join(TEST_DIR, 'content')
+  await mkdir(contentDir, { recursive: true })
+  for (const [name, source] of Object.entries(pages)) {
+    await writeFile(path.join(contentDir, name), source)
+  }
+  const templatePath = path.join(TEST_DIR, 'template.html')
+  await writeFile(templatePath, template)
+  return {
+    contentDir,
+    outputDir: path.join(TEST_DIR, 'docs'),
+    templatePath,
+    baseUrl: 'https://example.com',
+    translations: false,
+    skipLinkCheck: true,
+    defaultMeta: {
+      title: 'Site',
+      description: 'Test',
+      sidebarTitle: 'Test',
+      sidebarSummary: 'Test',
+      backLinkHref: '/',
+      backLinkLabel: 'Back',
+      ogImage: 'og.png',
+      ...defaultMeta,
+    },
+  }
+}
+
+test('build - front-matter keys fill template placeholders and sections', async () => {
+  const config = await templateFeatureSite(
+    '<html><head><title>{{TITLE}}</title></head><body>{{#EYEBROW}}<p class="eyebrow">{{EYEBROW}}</p>{{/EYEBROW}}{{BODY}}</body></html>',
+    {
+      'with.md': '---\ntitle: With\neyebrow: Rope & Co\n---\nBody with {{EYEBROW}}\n',
+      'without.md': '---\ntitle: Without\n---\nBody\n',
+    },
+  )
+  await build(config)
+  const withHtml = await readFile(path.join(TEST_DIR, 'docs', 'with.html'), 'utf-8')
+  expect(withHtml).toContain('<body><p class="eyebrow">Rope &amp; Co</p><p>Body with {{EYEBROW}}</p>')
+  const withoutHtml = await readFile(path.join(TEST_DIR, 'docs', 'without.html'), 'utf-8')
+  expect(withoutHtml).toContain('<body><p>Body</p>')
+})
+
+test('build - warns once per placeholder no page or defaultMeta sets', async () => {
+  const warnings = captureWarnings()
+  try {
+    const config = await templateFeatureSite(
+      '<html><head><title>{{TITLE}}</title></head><body>{{EYEBORW}}{{#EYEBORW}}x{{/EYEBORW}}{{#HERO}}{{/HERO}}{{EYEBROW}}{{TAGLINE}}{{BODY}}</body></html>',
+      {
+        'a.md': '---\ntitle: A\neyebrow: E\n---\nA\n',
+        'b.md': '---\ntitle: B\nhero: ""\n---\nB\n',
+        'c.md': '---\ntitle: C\n---\nC\n',
+      },
+      { tagline: 'Default' },
+    )
+    await build(config)
+    const placeholders = warnings.messages().filter((line) => line.includes('Template placeholder'))
+    expect(placeholders).toHaveLength(1)
+    expect(placeholders[0]).toContain('{{EYEBORW}}')
+  } finally {
+    warnings.restore()
+  }
+})
+
+test('build - expands a shared head partial in both templates', async () => {
+  const config = await templateFeatureSite(
+    '<html><head>{{> partials/head.html}}</head><body class="page">{{BODY}}</body></html>',
+    {
+      'index.md': '---\ntitle: Home\n---\nHome\n',
+      'about.md': '---\ntitle: About\n---\nAbout\n',
+    },
+  )
+  await mkdir(path.join(TEST_DIR, 'partials'), { recursive: true })
+  await writeFile(path.join(TEST_DIR, 'partials', 'head.html'), '<title>{{TITLE}}</title>')
+  const homepageTemplatePath = path.join(TEST_DIR, 'homepage.html')
+  await writeFile(homepageTemplatePath, '<html><head>{{> partials/head.html}}</head><body class="home">{{BODY}}</body></html>')
+
+  await build({ ...config, homepageTemplatePath })
+  const home = await readFile(path.join(TEST_DIR, 'docs', 'index.html'), 'utf-8')
+  expect(home).toStartWith('<html><head><title>Home</title>')
+  expect(home).toContain('<body class="home">')
+  const about = await readFile(path.join(TEST_DIR, 'docs', 'about.html'), 'utf-8')
+  expect(about).toStartWith('<html><head><title>About</title>')
+  expect(about).toContain('<body class="page">')
+})
+
+test('build - a template error fails before any page is written', async () => {
+  const config = await templateFeatureSite(
+    '<html><head>{{> partials/missing.html}}</head><body>{{BODY}}</body></html>',
+    { 'a.md': '---\ntitle: A\n---\nA\n' },
+  )
+  await expect(build(config)).rejects.toThrow(/Template include not found: .*template\.html -> .*missing\.html/)
+  expect(await Bun.file(path.join(TEST_DIR, 'docs', 'a.html')).exists()).toBe(false)
+
+  const unclosed = await templateFeatureSite(
+    '<html><head></head><body>{{#EYEBROW}}{{BODY}}</body></html>',
+    { 'a.md': '---\ntitle: A\n---\nA\n' },
+  )
+  await expect(build(unclosed)).rejects.toThrow(/template\.html never closes section EYEBROW/)
+})
+
+// Value: protects=the unset-placeholder warning scans the homepage template and the partials it includes; fails_when=warnUnsetPlaceholders drops homepageTemplatePath or scans raw files instead of expanded templates; why_new=the warning test uses one template with no includes; seam=none; no_claim=the exact warning wording
+test('build - warns about unset placeholders in the homepage template and its partials', async () => {
+  const warnings = captureWarnings()
+  try {
+    const config = await templateFeatureSite(
+      '<html><head><title>{{TITLE}}</title></head><body>{{BODY}}</body></html>',
+      { 'index.md': '---\ntitle: Home\n---\nHome\n', 'about.md': '---\ntitle: About\n---\nAbout\n' },
+    )
+    await mkdir(path.join(TEST_DIR, 'partials'), { recursive: true })
+    await writeFile(path.join(TEST_DIR, 'partials', 'hero.html'), '<p>{{HERO_TAGLNE}}</p>')
+    const homepageTemplatePath = path.join(TEST_DIR, 'homepage.html')
+    await writeFile(homepageTemplatePath, '<html><head></head><body>{{HOME_ONLY}}{{> partials/hero.html}}{{BODY}}</body></html>')
+
+    await build({ ...config, homepageTemplatePath })
+    const placeholders = warnings.messages().filter((line) => line.includes('Template placeholder'))
+    expect(placeholders).toHaveLength(2)
+    expect(placeholders.join('\n')).toContain('{{HOME_ONLY}}')
+    expect(placeholders.join('\n')).toContain('{{HERO_TAGLNE}}')
+  } finally {
+    warnings.restore()
+  }
+})
+
+// Value: protects=a site without a homepage page builds even when homepageTemplatePath points at a missing file, as in v3.1; fails_when=the unset-placeholder scan loads the homepage template unconditionally; why_new=the homepage scan test always renders an index page; seam=none; no_claim=none beyond protects
+test('build - ignores a missing homepage template when no page is a homepage', async () => {
+  const config = await templateFeatureSite(
+    '<html><head><title>{{TITLE}}</title></head><body>{{BODY}}</body></html>',
+    { 'about.md': '---\ntitle: About\n---\nAbout\n' },
+  )
+  await build({ ...config, homepageTemplatePath: path.join(TEST_DIR, 'missing-homepage.html') })
+  expect(await Bun.file(path.join(TEST_DIR, 'docs', 'about.html')).exists()).toBe(true)
+})
+
+// Value: protects=front-matter values are text, so `false` counts as set and keeps its section; fails_when=front-matter strings start being coerced to booleans without the README changing; why_new=the boolean test passes JS booleans and skips the front-matter parser; seam=none; no_claim=none beyond protects
+test('build - a front-matter false is text and keeps its section', async () => {
+  const config = await templateFeatureSite(
+    '<html><head><title>{{TITLE}}</title></head><body>{{#FEATURED}}[{{FEATURED}}]{{/FEATURED}}{{BODY}}</body></html>',
+    { 'a.md': '---\ntitle: A\nfeatured: false\n---\nA\n' },
+  )
+  await build(config)
+  expect(await readFile(path.join(TEST_DIR, 'docs', 'a.html'), 'utf-8')).toContain('<body>[false]<p>A</p>')
+})
