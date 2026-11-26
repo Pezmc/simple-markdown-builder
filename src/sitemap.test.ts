@@ -16,6 +16,7 @@ test('buildAlternateLinks - normalizes index URLs', () => {
     outputPath: '/docs/index.html',
     relativeOutput: 'index.html',
     html: '<p>Content</p>',
+    headings: [],
     meta: {
       title: 'Home',
       description: 'Home page',
@@ -46,6 +47,7 @@ test('buildAlternateLinks - normalizes /index in path', () => {
     outputPath: '/docs/sub/index.html',
     relativeOutput: 'sub/index.html',
     html: '<p>Content</p>',
+    headings: [],
     meta: {
       title: 'Sub',
       description: 'Sub page',
@@ -85,6 +87,7 @@ test('groupByTranslation - groups plans by translationOf or slug', () => {
       outputPath: '/docs/page.html',
       relativeOutput: 'page.html',
       html: '<p>Content</p>',
+      headings: [],
       meta: {
         title: 'Page',
         description: 'Page',
@@ -103,6 +106,7 @@ test('groupByTranslation - groups plans by translationOf or slug', () => {
       outputPath: '/docs/fr/page.html',
       relativeOutput: 'fr/page.html',
       html: '<p>Contenu</p>',
+      headings: [],
       meta: {
         title: 'Page',
         description: 'Page',
@@ -130,6 +134,7 @@ test('resolveCanonicalRelative - returns English version when available', () => 
       outputPath: '/docs/page.html',
       relativeOutput: 'page.html',
       html: '<p>Content</p>',
+      headings: [],
       meta: {
         title: 'Page',
         description: 'Page',
@@ -148,6 +153,7 @@ test('resolveCanonicalRelative - returns English version when available', () => 
       outputPath: '/docs/fr/page.html',
       relativeOutput: 'fr/page.html',
       html: '<p>Contenu</p>',
+      headings: [],
       meta: {
         title: 'Page',
         description: 'Page',
@@ -191,6 +197,7 @@ test('writeSitemap - excludes noindex pages', async () => {
       outputPath: '/docs/page1.html',
       relativeOutput: 'page1.html',
       html: '<p>Content</p>',
+      headings: [],
       meta: {
         title: 'Page 1',
         description: 'Page 1',
@@ -208,6 +215,7 @@ test('writeSitemap - excludes noindex pages', async () => {
       outputPath: '/docs/page2.html',
       relativeOutput: 'page2.html',
       html: '<p>Content</p>',
+      headings: [],
       meta: {
         title: 'Page 2',
         description: 'Page 2',
@@ -235,6 +243,7 @@ function sitemapPlan(relativeOutput: string, meta: Partial<RenderPlan['meta']> =
     outputPath: `/docs/${relativeOutput}`,
     relativeOutput,
     html: '<p>Content</p>',
+    headings: [],
     meta: {
       title: slug,
       description: slug,
@@ -294,6 +303,7 @@ function plan(relativeOutput: string, lang: string, meta: Partial<RenderPlan['me
     outputPath: `/docs/${relativeOutput}`,
     relativeOutput,
     html: '',
+    headings: [],
     meta: {
       title: 'Page',
       description: 'Page',

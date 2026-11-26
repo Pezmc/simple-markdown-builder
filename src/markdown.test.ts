@@ -66,3 +66,9 @@ test('renderMarkdown - keeps a space where a setext heading breaks lines', () =>
   const { headings } = renderMarkdown(createMarkdownRenderer(), 'Line one\nline two\n===')
   expect(headings[0]?.text).toBe('Line one line two')
 })
+
+test('renderMarkdown - skips headings with an empty anchor and spaces an inline <br>', () => {
+  const { html, headings } = renderMarkdown(createMarkdownRenderer(), '## ![Logo](logo.png)\n\n## a<br>b\n\n##')
+  expect(html).toContain('id=""')
+  expect(headings).toEqual([{ id: 'ab', text: 'a b', level: 2 }])
+})

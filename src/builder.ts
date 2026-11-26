@@ -92,7 +92,8 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
         ? undefined
         : buildAlternateLinks(plan, hreflangGroups, config.baseUrl, defaultLang)
       const canonicalRelative = resolveCanonicalRelative(plan, hreflangGroups)
-      const context = { plans, groups, alternates: alternates ?? [] }
+      // A copy, so a hook that edits it cannot change the page's hreflang tags.
+      const context = { plans, groups, alternates: (alternates ?? []).map((alt) => ({ ...alt })) }
       const jsonLd = config.jsonLd?.(plan, context)
       const rendered = await renderTemplate(
         plan.html,

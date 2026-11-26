@@ -210,3 +210,23 @@ test('jsonLd and onPageRendered - receive the same alternates the hreflang tags 
   expect(hreflangTags).toEqual(fr?.rendered?.alternates as { lang: string; href: string }[])
   expect(seen.get('404.html')?.rendered?.alternates).toEqual([])
 })
+
+test('jsonLd - editing context.alternates does not change the hreflang tags', async () => {
+  await writeContent('about.md', '# About')
+  await writeContent('fr/about.md', '---\ntranslationOf: about\n---\n# À propos')
+
+  await build(
+    config({
+      jsonLd: (_plan, context) => {
+        const alternates = context.alternates as { lang: string; href: string }[]
+        alternates.pop()
+        if (alternates[0]) alternates[0].href = 'https://evil.example/'
+        return undefined
+      },
+    }),
+  )
+
+  const html = await readOutput('fr/about.html')
+  expect(html).toContain('hreflang="x-default"')
+  expect(html).not.toContain('evil.example')
+})

@@ -139,7 +139,7 @@ await startDevServer(config, {
 
 ### Build Hooks
 
-`onPageRendered(html, plan, { plans, groups, alternates })` receives each page's rendered HTML and returns the HTML to write. `plans` is every page in the build and `groups` maps each translation group key (the page's path without its language directory, e.g. `classes/index`) to its pages, so the hook can add cross-page navigation. `alternates` is the page's own `{ lang, href }` list, the one the builder uses for its hreflang tags and language switcher: absolute URLs, default language first, and **the `x-default` entry last** (filter on `lang !== 'x-default'` for a switcher). It is empty on 404 pages. `buildAlternateLinks` stays exported, but a hook no longer needs to call it. Pages render concurrently, so the hook must not depend on the order it is called in.
+`onPageRendered(html, plan, { plans, groups, alternates })` receives each page's rendered HTML and returns the HTML to write. `plans` is every page in the build and `groups` maps each translation group key (the page's path without its language directory, e.g. `classes/index`) to its pages, so the hook can add cross-page navigation. `alternates` is the page's own `{ lang, href }` list, the one the builder uses for its hreflang tags and language switcher: absolute URLs, default language first, and **the `x-default` entry last** (filter on `lang !== 'x-default'` for a switcher). It is empty on 404 pages, and it is a copy, so editing it does not change the page's own tags. `buildAlternateLinks` stays exported, but a hook no longer needs to call it. Pages render concurrently, so the hook must not depend on the order it is called in.
 
 `onPagesWritten(plans, outputDir)` runs after every page and [redirect stub](#redirects) is written and before the link check, even when `skipLinkCheck` is set. Write extra files here that the rewritten pages link to. Files written here are link-checked but stay out of the sitemap, which is built from `plans`.
 
@@ -155,7 +155,7 @@ await build({
 })
 ```
 
-`plan.headings` lists the page's markdown headings in document order as `{ id, text, level }`. `id` is the anchor the rendered heading carries, `text` is plain text (inline markup such as `**bold**` and `` `code` `` stripped, entities like `&amp;` decoded, so escape it before writing it into HTML) and `level` is 1–3. Only `#`, `##` and `###` headings are listed, since those are the levels that get an anchor. Headings written as raw HTML in the markdown (`<h2 id="x">…</h2>`) are not included. A table of contents built from them:
+`plan.headings` lists the page's markdown headings in document order as `{ id, text, level }`. `id` is the anchor the rendered heading carries, `text` is plain text (inline markup such as `**bold**` and `` `code` `` stripped, entities like `&amp;` decoded, so escape it before writing it into HTML) and `level` is 1–3. Only `#`, `##` and `###` headings are listed, since those are the levels that get an anchor. Headings written as raw HTML in the markdown (`<h2 id="x">…</h2>`) are not included, nor are headings with no text to build an anchor from (an image-only `## ![Logo](logo.png)`). Unlike the page body, heading text is not mailto-obfuscated: an email address written in a heading comes through readable. A table of contents built from them:
 
 ```typescript
 const escape = (text: string) =>
@@ -437,6 +437,7 @@ Also new and additive; existing configs and hooks work unchanged:
 - **`plan.headings`**: each page's h1–h3 markdown headings as `{ id, text, level }`, taken from the markdown token stream, so a table of contents no longer has to parse the rendered HTML. See [Build Hooks](#build-hooks).
 - **`alternates` in the hook context**: `onPageRendered` and `jsonLd` receive the page's hreflang alternates (with `x-default` last) as `context.alternates`, instead of calling `buildAlternateLinks` themselves.
 - **Async `renderRedirect`**: it may return a `Promise<string>`, and the builder awaits it. Before, a returned promise was passed straight to the file write and the build failed.
+- **Required type fields**: `RenderPlan` gains `headings` and `PageRenderContext` gains `alternates`. Code that builds either object by hand (for example a test that calls `writeSitemap` or a hook with made-up plans) must add them; `headings: []` and `alternates: []` will do.
 - **New type exports**: `Heading` (the shape of each `plan.headings` entry) and `iAlternateLink` (each `alternates` entry).
 
 ### Changes in v3.1

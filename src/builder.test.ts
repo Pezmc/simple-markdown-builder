@@ -886,6 +886,20 @@ test('build - awaits an async renderRedirect', async () => {
   expect(await readFile(path.join(TEST_DIR, 'docs', 'old.html'), 'utf-8')).toBe('<a href="/new">moved</a>')
 })
 
+test('build - fails when an async renderRedirect rejects', async () => {
+  const config = await redirectSite(
+    { 'new.md': '# New' },
+    {
+      redirects: [{ from: '/old', to: '/new' }],
+      renderRedirect: async () => {
+        throw new Error('stylesheet missing')
+      },
+    },
+  )
+
+  await expect(build(config)).rejects.toThrow('stylesheet missing')
+})
+
 test('build - plan.headings ids match the anchors in plan.html', async () => {
   const config = await redirectSite(
     {
