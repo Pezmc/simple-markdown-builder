@@ -106,14 +106,18 @@ const SITE = 'http://site/'
 // Markdown percent-encodes image URLs ("my photo.png" renders as
 // my%20photo.png), and the file on disk has the decoded name.
 function assetPath(url: string, base: string, outputDir: string): string {
-  const pathname = new URL(url, base).pathname
-  let decoded = pathname
-  try {
-    decoded = decodeURI(pathname)
-  } catch {
-    // A malformed escape is checked as written.
-  }
-  return path.join(outputDir, ...decoded.split('/'))
+  // Segments decode one at a time, as the dev server does, so "%23" becomes
+  // "#" but an encoded slash stays inside its segment. A malformed escape is
+  // checked as written.
+  const segments = new URL(url, base).pathname.split('/').map((segment) => {
+    try {
+      const decoded = decodeURIComponent(segment)
+      return /[/\\]/.test(decoded) ? segment : decoded
+    } catch {
+      return segment
+    }
+  })
+  return path.join(outputDir, ...segments)
 }
 
 // A srcset URL may itself contain commas (data: URLs), so candidates are split

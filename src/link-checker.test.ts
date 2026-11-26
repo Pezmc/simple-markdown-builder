@@ -513,3 +513,18 @@ test('checkLinks - an asset URL needs the file itself, but an iframe may name a 
   expect(message).toContain('- /img/icon/ from ')
   expect(message).not.toContain('/embed from')
 })
+
+test('checkLinks - decodes reserved characters in asset path segments', async () => {
+  await mkdir(path.join(TEST_DIR, 'img'), { recursive: true })
+  await writeFile(path.join(TEST_DIR, 'img', 'a#b.png'), '')
+  await writeFile(path.join(TEST_DIR, 'img', 'a?b.png'), '')
+  await writeFile(
+    path.join(TEST_DIR, 'index.html'),
+    '<img src="/img/a%23b.png" alt=""><img src="/img/a%3Fb.png" alt=""><img src="/img%2Fa%23b.png" alt="">',
+  )
+  const message = await expectFailure(checkLinks(TEST_DIR))
+  expect(message).not.toContain('- /img/a%23b.png from')
+  expect(message).not.toContain('- /img/a%3Fb.png from')
+  // An encoded slash stays inside its segment instead of becoming a separator.
+  expect(message).toContain('- /img%2Fa%23b.png from ')
+})
