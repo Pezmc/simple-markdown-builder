@@ -239,7 +239,49 @@ Templates support these placeholders:
 - `{{UPDATED}}` - The page's last-modified date, formatted for the page's language with `Intl.DateTimeFormat` (`November 1, 2026` for `en`, `1 novembre 2026` for `fr`). Empty when the page has no date
 - `{{UPDATED_ISO}}` - The same date as `YYYY-MM-DD`, for `<time datetime="...">`. Empty when the page has no date
 
-Both date placeholders need `lastmod: 'git'`. Since they are empty without a date, wrap them in markup that still reads well when empty, or check `plan.meta.lastModified` in `onPageRendered`.
+Both date placeholders need `lastmod: 'git'`. They are empty without a date, so wrap the line in a section (below) to drop it.
+
+#### Front-matter placeholders
+
+Any front-matter or `defaultMeta` key also fills a placeholder named in upper snake case: `eyebrow` fills `{{EYEBROW}}`, `heroImage` fills `{{HERO_IMAGE}}`. Values are HTML-escaped, which does not make them safe as a URL or inside `<script>`. Front-matter values are text, so `featured: false` renders `false` and counts as set. The exceptions render `true` or empty: `noindex` and `translate`, which front matter parses as booleans (`{{NOINDEX}}`, `{{TRANSLATE}}`), and JavaScript booleans in `defaultMeta`. Pages written by `ensureTranslations` carry only the built-in keys, so add custom keys to translated files by hand. The built-in placeholders above keep their meaning and win when a key maps to the same name.
+
+A placeholder whose key this page does not set renders empty. When no page and no `defaultMeta` sets the key at all, the build warns once per name, since it is probably a typo. Only all-caps tokens (`{{[A-Z][A-Z0-9_]*}}`) are placeholders: `{{eyebrow}}` or `{{ TITLE }}` is left as written.
+
+#### Conditional sections
+
+`{{#NAME}}…{{/NAME}}` keeps its contents when `NAME` has a non-empty value and removes the whole block otherwise. It works for built-ins and front-matter placeholders alike, and sections may span lines, contain placeholders and nest other sections. This drops the footer's "Updated" line on a page that has no date yet:
+
+```html
+{{#UPDATED}}
+<span>Updated <time datetime="{{UPDATED_ISO}}">{{UPDATED}}</time></span>
+{{/UPDATED}}
+```
+
+An unclosed or mismatched section fails the build, naming the template and the section. There are no inverted sections, loops or expressions.
+
+#### Includes
+
+`{{> path}}` inserts another file, resolved relative to the file that includes it. Includes nest, and a missing file or an include cycle fails the build naming the chain. They are expanded first, so a partial can use placeholders and sections. Share one head between the page and homepage templates:
+
+```html
+<!-- scripts/partials/head.html -->
+<meta charset="utf-8" />
+<title>{{TITLE}}</title>
+<link rel="stylesheet" href="/css/site.css" />
+```
+
+```html
+<!-- scripts/template.html and scripts/homepage-template.html -->
+<!DOCTYPE html>
+<html lang="{{LANG}}">
+<head>
+  {{> partials/head.html}}
+</head>
+```
+
+The dev server rebuilds when an included file changes.
+
+Nothing is expanded inside the rendered markdown body or inside a placeholder's value: page content containing `{{TITLE}}` or `{{#X}}` is output as written.
 
 `{{LANGUAGE_SWITCHER}}` renders only when a page has more than one language. It carries no styling, only class names to style:
 
@@ -360,6 +402,18 @@ The first line marks the file as generated. If `outputDir` already holds a `robo
 - The link checker checks the 404 page's links like any other page.
 
 GitHub Pages only serves the root `404.html`. Language-specific pages such as `fr/404.html` are built, but nothing serves them automatically at missing French URLs; link to them from the root 404 page or route to them with your host's own rules.
+
+### Changes in v3.2
+
+New and opt-in: front-matter placeholders, conditional sections (`{{#NAME}}…{{/NAME}}`) and includes (`{{> path}}`). See [Template Placeholders](#template-placeholders).
+
+These change the output of existing templates:
+
+- **Unset placeholders render empty**: an all-caps token that is not a built-in, such as `{{EYEBROW}}`, used to stay in the HTML as written and reach `onPageRendered` that way. It now renders the page's `eyebrow` value, or empty when the page does not set it, and the build warns when no page or `defaultMeta` sets it.
+- **Single-pass substitution**: placeholder values and the body are inserted once and never re-read, so a title containing `{{YEAR}}` stays literal, and `$$`, `$&` or `` $` `` in the body or a value is no longer rewritten by `String.replace`.
+- **`{{> ...}}` is an include**: a template that contained that text literally now reads it as a file to insert.
+
+`defaultMeta` accepts keys beyond the known ones, so `defaultMeta: { eyebrow: '' }` type-checks.
 
 ### Changes in v3.1
 
