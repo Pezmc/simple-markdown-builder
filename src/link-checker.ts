@@ -92,6 +92,22 @@ function extractHrefs(html: string): string[] {
   return matches.map((match) => match.slice(6, -1))
 }
 
+const SITE = 'http://site/'
+
+// The file an asset URL names, after the browser's own path resolution.
+// Markdown percent-encodes image URLs ("my photo.png" renders as
+// my%20photo.png), and the file on disk has the decoded name.
+function assetPath(url: string, base: string, outputDir: string): string {
+  const pathname = new URL(url, base).pathname
+  let decoded = pathname
+  try {
+    decoded = decodeURI(pathname)
+  } catch {
+    // A malformed escape is checked as written.
+  }
+  return path.join(outputDir, ...decoded.split('/'))
+}
+
 // A srcset URL may itself contain commas (data: URLs), so candidates are split
 // the way browsers do: a URL runs to the next whitespace, and a comma ends a
 // candidate only after its URL or descriptors.
@@ -111,13 +127,20 @@ function srcsetUrls(srcset: string): string[] {
   return urls
 }
 
-// The leading whitespace keeps lazy-loading `data-src`/`data-srcset` out: they
-// often hold placeholders the page swaps in with script.
+// Only attributes of real tags count: comments and inline script bodies are
+// dropped first, since `const src = "..."` or a commented-out <img> is never
+// requested. The leading whitespace keeps lazy-loading `data-src`/`data-srcset`
+// out: they often hold placeholders the page swaps in with script.
 function extractAssetUrls(html: string): string[] {
+  const markup = html
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/(<script\b[^>]*>)[\s\S]*?<\/script>/gi, '$1</script>')
   const urls: string[] = []
-  for (const match of html.matchAll(/\s(src|srcset)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
-    const value = match[2] ?? match[3] ?? ''
-    urls.push(...(match[1]?.toLowerCase() === 'srcset' ? srcsetUrls(value) : [value]))
+  for (const [tag] of markup.matchAll(/<[a-z][^>]*>/gi)) {
+    for (const match of tag.matchAll(/\s(src|srcset)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
+      const value = match[2] ?? match[3] ?? ''
+      urls.push(...(match[1]?.toLowerCase() === 'srcset' ? srcsetUrls(value) : [value]))
+    }
   }
   return urls.filter(Boolean)
 }
@@ -229,25 +252,21 @@ export async function checkLinks(
         if (ABSOLUTE_URL.test(url) || url.startsWith('//')) {
           continue
         }
-        // Markdown percent-encodes image URLs ("my photo.png" renders as
-        // my%20photo.png); the file on disk has the decoded name.
-        const pathPart = url.split(/[?#]/)[0] ?? ''
-        let decoded = pathPart
-        try {
-          decoded = decodeURI(pathPart)
-        } catch {
-          // A malformed escape is checked as written.
+        // Resolved as a browser would, so "../" never climbs above the site
+        // root. A bare relative src on a nested page (guides/x.html ->
+        // diagram.png) is page-relative in a browser, but the site-root
+        // reading the href check uses is also accepted.
+        const pagePath = path.relative(resolvedOutputDir, file).split(path.sep).join('/')
+        const candidates = [
+          ...(url.startsWith('/') ? [] : [assetPath(url, `${SITE}${pagePath}`, resolvedOutputDir)]),
+          assetPath(url, SITE, resolvedOutputDir),
+        ]
+        let found = false
+        for (const candidate of candidates) {
+          found ||= (await findTargetFile(candidate)).found
         }
-        const resolvedPath = resolveInternalPath(decoded, file, resolvedOutputDir)
-        // A bare relative src on a nested page (guides/x.html -> diagram.png)
-        // is relative to the page in a browser, unlike resolveInternalPath's
-        // site-root reading, so either location counts.
-        const pageRelative = path.resolve(path.dirname(file), decoded)
-        const found =
-          (await findTargetFile(resolvedPath)).found ||
-          (!url.startsWith('/') && (await findTargetFile(pageRelative)).found)
         if (!found) {
-          missingAssets.push({ fromFile: file, href: url, resolvedPath })
+          missingAssets.push({ fromFile: file, href: url, resolvedPath: candidates[0]! })
         }
       }
     }
@@ -292,7 +311,10 @@ async function findMissingSiblingLinks(
       const content = await readFile(plan.outputPath, 'utf-8')
       const linked = new Set<string>()
       for (const href of extractAnchorHrefs(content)) {
-        const local = origin && href.startsWith(`${origin}/`) ? href.slice(origin.length) : href
+        const local =
+          origin && (href === origin || href.startsWith(`${origin}/`))
+            ? href.slice(origin.length) || '/'
+            : href
         if (isSkippableHref(local) || local.startsWith('#')) {
           continue
         }

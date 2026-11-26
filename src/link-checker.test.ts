@@ -426,3 +426,48 @@ test('checkLinks - decodes percent-encoded asset URLs before resolving them', as
   // A malformed escape is checked as written, not thrown on.
   expect(message).toContain('- /img/100%.png from ')
 })
+
+test('checkLinks - ignores src text inside inline scripts and comments', async () => {
+  await writeFile(
+    path.join(TEST_DIR, 'index.html'),
+    [
+      '<script>const src = "/dynamic/a.png"; el.innerHTML = \'<img src="/dynamic/b.png">\'</script>',
+      '<!-- <img src="/old/c.png"> -->',
+      '<img src="/img/real-missing.png" alt="">',
+    ].join('\n'),
+  )
+  const message = await expectFailure(checkLinks(TEST_DIR))
+  expect(message).toContain('- /img/real-missing.png from ')
+  expect(message).not.toContain('/dynamic/')
+  expect(message).not.toContain('/old/c.png')
+})
+
+test('checkLinks - a parent-relative asset URL is clamped to the site root like a browser does', async () => {
+  const guides = path.join(TEST_DIR, 'site', 'guides')
+  await mkdir(guides, { recursive: true })
+  // A file beside the output directory must not satisfy the check.
+  await writeFile(path.join(TEST_DIR, 'secret.png'), '')
+  await writeFile(path.join(guides, 'x.html'), '<img src="../../secret.png" alt="">')
+  const message = await expectFailure(checkLinks(path.join(TEST_DIR, 'site')))
+  expect(message).toContain('- ../../secret.png from ')
+
+  await writeFile(path.join(TEST_DIR, 'site', 'secret.png'), '')
+  await checkLinks(path.join(TEST_DIR, 'site'))
+})
+
+test('checkLinks - translationSiblings counts a link to the bare baseUrl origin', async () => {
+  await mkdir(path.join(TEST_DIR, 'fr'), { recursive: true })
+  const plans = translatedPair().map((plan) =>
+    plan.meta.lang === 'en'
+      ? { ...plan, outputPath: path.join(TEST_DIR, 'index.html'), relativeOutput: 'index.html' }
+      : plan,
+  )
+  await writeFile(path.join(TEST_DIR, 'index.html'), '<a href="/fr/about">FR</a>')
+  await writeFile(path.join(TEST_DIR, 'fr', 'about.html'), '<a href="https://example.com">EN</a>')
+
+  await checkLinks(TEST_DIR, {
+    linkCheck: { translationSiblings: true },
+    translationGroups: new Map([['about', plans]]),
+    baseUrl: 'https://example.com',
+  })
+})

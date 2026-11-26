@@ -24,6 +24,10 @@ function normalizeFrom(from: string): string {
   if (ABSOLUTE_URL.test(from) || from.startsWith('//') || /[?#]/.test(from)) {
     throw new Error(`Redirect from "${from}" must be a site path without a query or fragment`)
   }
+  // path.join treats "\\" as a separator on Windows, so it could smuggle in ".."
+  if (from.includes('\\')) {
+    throw new Error(`Redirect from "${from}" must not contain backslashes`)
+  }
   const trimmed = from.replace(/\/+/g, '/').replace(/^\//, '')
   if (trimmed.split('/').some((segment) => segment === '..' || segment === '.')) {
     throw new Error(`Redirect from "${from}" must not contain . or .. segments`)
@@ -36,6 +40,17 @@ function normalizeFrom(from: string): string {
     throw new Error(`Redirect from "${from}" must end in .html or have no extension`)
   }
   return `${withIndex.slice(0, withIndex.length - extension.length)}.html`
+}
+
+function isHttpUrl(to: string): boolean {
+  if (!/^https?:\/\//i.test(to)) {
+    return false
+  }
+  try {
+    return new URL(to).hostname !== ''
+  } catch {
+    return false
+  }
 }
 
 // The built page an internal `to` lands on, tried the way a static host
@@ -90,7 +105,7 @@ export function planRedirectStubs(
       ? firstSegment
       : defaultLang
 
-    if (/^https?:\/\//i.test(to)) {
+    if (isHttpUrl(to)) {
       add(relativeOutput, to, to, lang, 'moved')
       continue
     }
@@ -111,6 +126,9 @@ export function planRedirectStubs(
       const defaults = group.filter((entry) => entry.meta.lang === defaultLang)
       for (const plan of defaults) {
         for (const lang of supportedLangs) {
+          if (lang === defaultLang) {
+            continue
+          }
           const inLang = group.filter((entry) => entry.meta.lang === lang)
           // A slug-keyed group can hold several default-language pages
           // (index.md and guides/index.md). Then only a page at the mirrored

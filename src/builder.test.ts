@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, writeFile, rm, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { build } from './builder.js'
-import type { BuilderConfig, RedirectInfo } from './config.js'
+import type { BuilderConfig, Redirect, RedirectInfo } from './config.js'
 
 const TEST_DIR = path.join(process.cwd(), '.test-builder')
 
@@ -938,6 +938,28 @@ test('build - rejects a redirect from that is a URL, has a query or has another 
   ]
   for (const [from, error] of cases) {
     const config = await redirectSite({ 'about.md': '# About' }, { redirects: [{ from, to: '/about' }] })
+    await expect(build(config)).rejects.toThrow(error)
+  }
+})
+
+test('build - translationFallback never writes stubs for the default language', async () => {
+  const config = await redirectSite(
+    { 'index.md': '# Home', 'guides/index.md': '# Guides' },
+    { translations: { ...TRANSLATIONS, supportedLangs: ['en', 'fr'] }, translationFallback: 'redirect' },
+  )
+  await build(config)
+  const exists = await readFile(path.join(TEST_DIR, 'docs', 'en', 'index.html'), 'utf-8').then(() => true, () => false)
+  expect(exists).toBe(false)
+})
+
+test('build - rejects backslashes in a redirect from and external targets with no host', async () => {
+  const cases: [Redirect, string][] = [
+    [{ from: '/a\\..\\..\\outside', to: '/about' }, 'must not contain backslashes'],
+    [{ from: '/old', to: 'https://' }, 'must be a site path starting with / or an http(s) URL'],
+    [{ from: '/old', to: 'https://exa mple.com' }, 'must be a site path starting with / or an http(s) URL'],
+  ]
+  for (const [redirect, error] of cases) {
+    const config = await redirectSite({ 'about.md': '# About' }, { redirects: [redirect] })
     await expect(build(config)).rejects.toThrow(error)
   }
 })
