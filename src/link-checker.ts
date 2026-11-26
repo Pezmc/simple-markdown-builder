@@ -140,23 +140,38 @@ function srcsetUrls(srcset: string): string[] {
 function stripInactiveMarkup(html: string): string {
   return html
     .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/(<script\b[^>]*>)[\s\S]*?<\/script>/gi, '$1</script>')
+    .replace(/(<script\b(?:[^>"']|"[^"]*"|'[^']*')*>)[\s\S]*?<\/script>/gi, '$1</script>')
 }
 
 // Only attributes of real tags count. The leading whitespace keeps
 // lazy-loading `data-src`/`data-srcset` out: they often hold placeholders the
 // page swaps in with script.
-function extractAssetUrls(html: string): string[] {
+// An <iframe>/<frame> src names a page, resolved like a link; every other src
+// names a file that must exist as written.
+function extractAssetUrls(html: string): { readonly url: string; readonly isPage: boolean }[] {
   const markup = stripInactiveMarkup(html)
-  const urls: string[] = []
+  const urls: { url: string; isPage: boolean }[] = []
   // A tag ends at the first > outside a quoted attribute value.
   for (const [tag] of markup.matchAll(/<[a-z](?:[^>"']|"[^"]*"|'[^']*')*>/gi)) {
+    const isPage = /^<i?frame\b/i.test(tag)
     for (const match of tag.matchAll(/\s(src|srcset)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
       const value = match[2] ?? match[3] ?? ''
-      urls.push(...(match[1]?.toLowerCase() === 'srcset' ? srcsetUrls(value) : [value]))
+      for (const url of match[1]?.toLowerCase() === 'srcset' ? srcsetUrls(value) : [value]) {
+        if (url) {
+          urls.push({ url, isPage })
+        }
+      }
     }
   }
-  return urls.filter(Boolean)
+  return urls
+}
+
+async function isFile(candidate: string): Promise<boolean> {
+  try {
+    return (await stat(candidate)).isFile()
+  } catch {
+    return false
+  }
 }
 
 function extractAnchorHrefs(html: string): string[] {
@@ -262,7 +277,7 @@ export async function checkLinks(
     }
 
     if (checkAssets) {
-      for (const url of extractAssetUrls(content)) {
+      for (const { url, isPage } of extractAssetUrls(content)) {
         if (ABSOLUTE_URL.test(url) || url.startsWith('//')) {
           continue
         }
@@ -277,7 +292,7 @@ export async function checkLinks(
         ]
         let found = false
         for (const candidate of candidates) {
-          found ||= (await findTargetFile(candidate)).found
+          found ||= isPage ? (await findTargetFile(candidate)).found : await isFile(candidate)
         }
         if (!found) {
           missingAssets.push({ fromFile: file, href: url, resolvedPath: candidates[0]! })

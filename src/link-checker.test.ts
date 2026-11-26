@@ -492,3 +492,24 @@ test('checkLinks - translationSiblings ignores a commented-out switcher', async 
   )
   expect(message).toContain('- /fr/about from ')
 })
+
+test('checkLinks - keeps a script src that follows a quoted attribute containing >', async () => {
+  await writeFile(path.join(TEST_DIR, 'index.html'), '<script title="x > y" src="/js/missing.js">var a = 1</script>')
+  const message = await expectFailure(checkLinks(TEST_DIR))
+  expect(message).toContain('- /js/missing.js from ')
+})
+
+test('checkLinks - an asset URL needs the file itself, but an iframe may name a page', async () => {
+  await mkdir(path.join(TEST_DIR, 'img', 'icon'), { recursive: true })
+  await writeFile(path.join(TEST_DIR, 'img', 'logo.html'), '<p>not an image</p>')
+  await writeFile(path.join(TEST_DIR, 'img', 'icon', 'index.html'), '<p>not an image</p>')
+  await writeFile(path.join(TEST_DIR, 'embed.html'), '<p>embed</p>')
+  await writeFile(
+    path.join(TEST_DIR, 'index.html'),
+    '<img src="/img/logo" alt=""><img src="/img/icon/" alt=""><iframe src="/embed"></iframe>',
+  )
+  const message = await expectFailure(checkLinks(TEST_DIR))
+  expect(message).toContain('- /img/logo from ')
+  expect(message).toContain('- /img/icon/ from ')
+  expect(message).not.toContain('/embed from')
+})
