@@ -370,8 +370,8 @@ async function findMissingSiblingLinks(
           linked.add(path.normalize(targetFile))
         }
       }
-      // Slug-keyed groups can hold two pages in one language (index.md and
-      // guides/index.md), so a link to either satisfies that language.
+      // A group can hold two pages in one language when a hand-written
+      // translationOf names another page's path; a link to either counts.
       for (const lang of langs) {
         const siblings = group.filter((entry) => entry.meta.lang === lang)
         if (

@@ -175,7 +175,7 @@ await build({
 
 Each stub is written to `<from>.html` (`/guides/` writes `guides/index.html`; a percent-encoded `from` such as `/fr/le%C3%A7ons` is decoded first, as hosts decode request paths) and carries a `<meta http-equiv="refresh">` to `to`, a `rel="canonical"` with the target's absolute URL, `<meta name="robots" content="noindex, follow">` and a visible link. `to` is a site path starting with `/` or an `http(s)://` URL with a host.
 
-`translationFallback: 'redirect'` writes a stub for every default-language page that has no translation in one of `supportedLangs`. With `about.md` and no `nl/about.md`, `nl/about.html` redirects to `/about`, so a language switcher or nav that always links `/nl/...` never 404s. A translation in another language does not stop it: each missing language gets its own stub. Pages with no default-language version get no fallback, since there is nothing to redirect to. When several default-language pages share a slug (`index.md` and `guides/index.md`), a page counts as translated only if the translation sits at the mirrored path (`fr/guides/index.html`).
+`translationFallback: 'redirect'` writes a stub for every default-language page that has no translation in one of `supportedLangs`. With `about.md` and no `nl/about.md`, `nl/about.html` redirects to `/about`, so a language switcher or nav that always links `/nl/...` never 404s. A translation in another language does not stop it: each missing language gets its own stub. Pages with no default-language version get no fallback, since there is nothing to redirect to.
 
 The build fails, before any page is written, when:
 

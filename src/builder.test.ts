@@ -809,7 +809,7 @@ test('build - translationFallback writes a stub per missing language', async () 
   expect(await readFile(path.join(docs, 'fr', 'about.html'), 'utf-8')).toContain('À propos')
 })
 
-test('build - translationFallback covers each default-language page in a slug group', async () => {
+test('build - translationFallback covers index pages in different directories', async () => {
   const config = await redirectSite(
     { 'index.md': '# Home', 'guides/index.md': '# Guides' },
     {
@@ -894,7 +894,7 @@ test('build - rejects protocol-relative and non-http redirect targets', async ()
   }
 })
 
-test('build - translationFallback decides per page when default-language pages share a slug', async () => {
+test('build - translationFallback treats a translated index as translating only its own directory', async () => {
   const config = await redirectSite(
     { 'index.md': '# Home', 'guides/index.md': '# Guides', 'fr/index.md': '# Accueil' },
     {

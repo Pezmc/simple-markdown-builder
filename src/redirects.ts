@@ -151,20 +151,10 @@ export function planRedirectStubs(
     // A 404 page answers every missing URL, so it is nobody's translation.
     const translatable = plans.filter((plan) => !isNotFoundOutput(plan.relativeOutput, supportedLangs))
     for (const group of groupByTranslation(translatable).values()) {
-      const defaults = group.filter((entry) => entry.meta.lang === defaultLang)
-      for (const plan of defaults) {
+      const langs = new Set(group.map((entry) => entry.meta.lang))
+      for (const plan of group.filter((entry) => entry.meta.lang === defaultLang)) {
         for (const lang of supportedLangs) {
-          if (lang === defaultLang) {
-            continue
-          }
-          const inLang = group.filter((entry) => entry.meta.lang === lang)
-          // A slug-keyed group can hold several default-language pages
-          // (index.md and guides/index.md). Then only a page at the mirrored
-          // path shows which of them is translated.
-          const translated = defaults.length === 1
-            ? inLang.length > 0
-            : inLang.some((entry) => entry.relativeOutput === `${lang}/${plan.relativeOutput}`)
-          if (translated) {
+          if (langs.has(lang)) {
             continue
           }
           add(
