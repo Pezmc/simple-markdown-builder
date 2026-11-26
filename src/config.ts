@@ -14,6 +14,9 @@ export interface FrontMatter {
   readonly translate?: string | boolean
   readonly noindex?: string | boolean
   readonly ogImage?: string
+  readonly ogImageWidth?: string
+  readonly ogImageHeight?: string
+  readonly ogType?: string
   readonly twitterImage?: string
 }
 
@@ -33,7 +36,12 @@ export interface KnownPageMeta {
   readonly translate?: string | boolean
   readonly noindex?: string | boolean
   readonly ogImage?: string
+  readonly ogImageWidth?: string
+  readonly ogImageHeight?: string
+  readonly ogType?: string
   readonly twitterImage?: string
+  // ISO date (YYYY-MM-DD) of the source file's last commit, set when `lastmod: 'git'`.
+  readonly lastModified?: string
 }
 
 // Front-matter keys the builder does not know pass through onto `meta` as-is.
@@ -87,11 +95,17 @@ export interface PageRenderContext {
   readonly groups: ReadonlyMap<string, readonly RenderPlan[]>
 }
 
+export type JsonLd = object | readonly object[]
+
+export interface RobotsConfig {
+  readonly disallow?: readonly string[]
+}
+
 export interface BuilderConfig {
   readonly contentDir?: string
   readonly outputDir?: string
   readonly baseUrl: string
-  readonly defaultMeta: Omit<KnownPageMeta, 'slug' | 'output' | 'lang' | 'translationOf' | 'translate' | 'noindex'>
+  readonly defaultMeta: Omit<KnownPageMeta, 'slug' | 'output' | 'lang' | 'translationOf' | 'translate' | 'noindex' | 'lastModified'>
   readonly templatePath: string
   readonly homepageTemplatePath?: string
   readonly markdownOptions?: MarkdownItOptions
@@ -100,6 +114,12 @@ export interface BuilderConfig {
   readonly noreferrer?: boolean
   readonly skipLinkCheck?: boolean
   readonly clean?: boolean
+  readonly lastmod?: 'git' | false
+  readonly robots?: boolean | RobotsConfig
+  readonly jsonLd?: (
+    plan: RenderPlan,
+    context: PageRenderContext,
+  ) => JsonLd | undefined
   readonly onPageRendered?: (
     html: string,
     plan: RenderPlan,

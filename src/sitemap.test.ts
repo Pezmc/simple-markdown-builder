@@ -226,3 +226,63 @@ test('writeSitemap - excludes noindex pages', async () => {
   expect(sitemap).toContain('page2')
 })
 
+
+function sitemapPlan(relativeOutput: string, meta: Partial<RenderPlan['meta']> = {}): RenderPlan {
+  const slug = relativeOutput.replace(/^(fr|nl)\//, '').replace(/\.html$/, '')
+  return {
+    sourcePath: `/content/${relativeOutput.replace(/\.html$/, '.md')}`,
+    outputPath: `/docs/${relativeOutput}`,
+    relativeOutput,
+    html: '<p>Content</p>',
+    meta: {
+      title: slug,
+      description: slug,
+      sidebarTitle: slug,
+      sidebarSummary: slug,
+      backLinkHref: '/',
+      backLinkLabel: 'Back',
+      slug,
+      lang: relativeOutput.startsWith('fr/') ? 'fr' : 'en',
+      output: relativeOutput,
+      ...meta,
+    },
+  }
+}
+
+test('buildAlternateLinks - every translation names the default-language page as x-default', () => {
+  const en = sitemapPlan('about.html')
+  const fr = sitemapPlan('fr/about.html', { translationOf: 'about' })
+  const groups = groupByTranslation([en, fr])
+  for (const plan of [en, fr]) {
+    const xDefault = buildAlternateLinks(plan, groups, 'https://example.com', 'en').find(
+      (alt) => alt.lang === 'x-default',
+    )
+    expect(xDefault?.href).toBe('https://example.com/about')
+  }
+})
+
+test('writeSitemap - writes <lastmod> after <loc> when the page has a date', async () => {
+  await mkdir(TEST_DIR, { recursive: true })
+  await writeSitemap(
+    [sitemapPlan('dated.html', { lastModified: '2026-10-02' }), sitemapPlan('undated.html')],
+    TEST_DIR,
+    'https://example.com',
+    'en',
+  )
+  const sitemap = await readFile(path.join(TEST_DIR, 'sitemap.xml'), 'utf-8')
+  expect(sitemap).toContain(
+    '    <loc>https://example.com/dated</loc>\n    <lastmod>2026-10-02</lastmod>',
+  )
+  expect(sitemap.match(/<lastmod>/g)).toHaveLength(1)
+})
+
+test('buildAlternateLinks - without a default-language page, the group still agrees on x-default', () => {
+  const fr = sitemapPlan('fr/about.html', { translationOf: 'about' })
+  const nl = { ...sitemapPlan('nl/about.html', { translationOf: 'about' }) }
+  const nlPlan = { ...nl, meta: { ...nl.meta, lang: 'nl' } }
+  const groups = groupByTranslation([fr, nlPlan])
+  const xDefaults = [fr, nlPlan].map(
+    (plan) => buildAlternateLinks(plan, groups, 'https://example.com', 'en').find((alt) => alt.lang === 'x-default')?.href,
+  )
+  expect(xDefaults[0]).toBe(xDefaults[1])
+})

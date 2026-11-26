@@ -44,11 +44,10 @@ export function buildAlternateLinks(
     }
   })
 
-  const canonicalRelative = normalizeIndexUrl(
-    stripHtmlExtension(resolveCanonicalRelative(plan, groups)),
-  )
-  const xDefaultHref = toAbsoluteUrl(canonicalRelative, baseUrl)
-  return [...sortAlternates(links, defaultLang), { lang: 'x-default', href: xDefaultHref }]
+  // Every page in a group must name the same x-default: the default-language
+  // version, which sorts first, else the first language that has a version.
+  const sorted = sortAlternates(links, defaultLang)
+  return [...sorted, { lang: 'x-default', href: sorted[0]!.href }]
 }
 
 function sortAlternates(
@@ -100,9 +99,11 @@ export async function writeSitemap(
         : ''
       const normalizedLoc = normalizeIndexUrl(stripHtmlExtension(plan.relativeOutput))
       const loc = toAbsoluteUrl(normalizedLoc, baseUrl)
+      const lastmod = plan.meta.lastModified ? `    <lastmod>${plan.meta.lastModified}</lastmod>` : ''
       return [
         '  <url>',
         `    <loc>${loc}</loc>`,
+        lastmod,
         altLinks,
         '  </url>',
       ]
