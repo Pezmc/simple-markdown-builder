@@ -14,10 +14,12 @@ const SKIP_SCHEMES = ['http://', 'https://']
 const ABSOLUTE_URL = /^[a-z][a-z\d+.-]*:/i
 
 function isSkippableHref(href: string): boolean {
+  // URL schemes are case-insensitive: "HTTPS://" is as external as "https://".
+  const lower = href.toLowerCase()
   return (
     !href ||
-    SKIP_PREFIXES.some((prefix) => href.startsWith(prefix)) ||
-    SKIP_SCHEMES.some((scheme) => href.startsWith(scheme))
+    SKIP_PREFIXES.some((prefix) => lower.startsWith(prefix)) ||
+    SKIP_SCHEMES.some((scheme) => lower.startsWith(scheme))
   )
 }
 
@@ -136,7 +138,8 @@ function extractAssetUrls(html: string): string[] {
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/(<script\b[^>]*>)[\s\S]*?<\/script>/gi, '$1</script>')
   const urls: string[] = []
-  for (const [tag] of markup.matchAll(/<[a-z][^>]*>/gi)) {
+  // A tag ends at the first > outside a quoted attribute value.
+  for (const [tag] of markup.matchAll(/<[a-z](?:[^>"']|"[^"]*"|'[^']*')*>/gi)) {
     for (const match of tag.matchAll(/\s(src|srcset)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
       const value = match[2] ?? match[3] ?? ''
       urls.push(...(match[1]?.toLowerCase() === 'srcset' ? srcsetUrls(value) : [value]))

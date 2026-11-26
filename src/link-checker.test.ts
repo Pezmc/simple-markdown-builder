@@ -471,3 +471,10 @@ test('checkLinks - translationSiblings counts a link to the bare baseUrl origin'
     baseUrl: 'https://example.com',
   })
 })
+
+test('checkLinks - reads src after a quoted attribute containing >', async () => {
+  await writeFile(path.join(TEST_DIR, 'index.html'), `<img alt="x > y" src="/missing.png"><img title='a>b' src="/gone.png">`)
+  const message = await expectFailure(checkLinks(TEST_DIR))
+  expect(message).toContain('- /missing.png from ')
+  expect(message).toContain('- /gone.png from ')
+})

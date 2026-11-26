@@ -963,3 +963,11 @@ test('build - rejects backslashes in a redirect from and external targets with n
     await expect(build(config)).rejects.toThrow(error)
   }
 })
+
+test('build - accepts an upper-case http scheme and refuses an upper-case .HTML from', async () => {
+  const ok = await redirectSite({ 'about.md': '# About' }, { redirects: [{ from: '/old', to: 'HTTPS://example.org/x' }] })
+  await build(ok)
+
+  const bad = await redirectSite({ 'about.md': '# About' }, { redirects: [{ from: '/old.HTML', to: '/about' }] })
+  await expect(build(bad)).rejects.toThrow('must end in .html or have no extension')
+})

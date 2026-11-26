@@ -36,7 +36,9 @@ function normalizeFrom(from: string): string {
   // Only .html stubs are served for their extensionless URL; "/old.htm" would
   // be written to old.html and still 404.
   const extension = path.posix.extname(withIndex)
-  if (extension && extension.toLowerCase() !== '.html') {
+  // ".HTML" is refused too: the stub is written as lower-case .html, which a
+  // case-sensitive host would not serve for "/old.HTML".
+  if (extension && extension !== '.html') {
     throw new Error(`Redirect from "${from}" must end in .html or have no extension`)
   }
   return `${withIndex.slice(0, withIndex.length - extension.length)}.html`
