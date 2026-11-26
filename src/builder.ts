@@ -125,7 +125,7 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
     await checkLinks(outputDir, {
       linkCheck: config.linkCheck,
       redirectStubs: new Set(redirectStubs.map((stub) => stub.outputPath)),
-      translationGroups: groups,
+      translationGroups: hreflangGroups,
       baseUrl: config.baseUrl,
     })
   }

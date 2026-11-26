@@ -2,6 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { BuilderConfig, RedirectInfo, RenderPlan } from './config.js'
 import { groupByTranslation } from './sitemap.js'
+import { isNotFoundOutput } from './seo.js'
 import { cleanUrl, escapeHtml } from './template.js'
 import { normalizeIndexUrl, stripHtmlExtension } from './utils.js'
 
@@ -147,7 +148,9 @@ export function planRedirectStubs(
   }
 
   if (config.translationFallback === 'redirect') {
-    for (const group of groupByTranslation([...plans]).values()) {
+    // A 404 page answers every missing URL, so it is nobody's translation.
+    const translatable = plans.filter((plan) => !isNotFoundOutput(plan.relativeOutput, supportedLangs))
+    for (const group of groupByTranslation(translatable).values()) {
       const defaults = group.filter((entry) => entry.meta.lang === defaultLang)
       for (const plan of defaults) {
         for (const lang of supportedLangs) {

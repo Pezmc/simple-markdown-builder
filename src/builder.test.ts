@@ -999,3 +999,24 @@ test('build - decodes an internal redirect target before looking up the page', a
     '<link rel="canonical" href="https://example.com/team%20docs/about" />',
   )
 })
+
+test('build - 404 pages get no translation fallback and are not held to the sibling check', async () => {
+  const config = await redirectSite(
+    { 'about.md': '# About', 'fr/about.md': '---\ntranslationOf: about\n---\n# À propos', '404.md': '# Not found', 'fr/404.md': '# Introuvable' },
+    {
+      translations: { ...TRANSLATIONS, supportedLangs: ['en', 'fr', 'nl'] },
+      translationFallback: 'redirect',
+      linkCheck: { translationSiblings: true },
+    },
+  )
+  await writeFile(
+    config.templatePath,
+    '<html><head><title>{{TITLE}}</title></head><body>{{LANGUAGE_SWITCHER}}{{BODY}}</body></html>',
+  )
+  await build(config)
+
+  const docs = path.join(TEST_DIR, 'docs')
+  expect(await readFile(path.join(docs, 'nl', 'about.html'), 'utf-8')).toContain('url=/about')
+  const nl404 = await readFile(path.join(docs, 'nl', '404.html'), 'utf-8').then(() => true, () => false)
+  expect(nl404).toBe(false)
+})
