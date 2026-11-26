@@ -126,7 +126,10 @@ export interface BuilderConfig {
   readonly contentDir?: string
   readonly outputDir?: string
   readonly baseUrl: string
-  readonly defaultMeta: Omit<KnownPageMeta, 'slug' | 'output' | 'lang' | 'translationOf' | 'translate' | 'noindex' | 'lastModified'>
+  // Extra keys fill template placeholders, like front-matter keys.
+  readonly defaultMeta: Omit<KnownPageMeta, 'slug' | 'output' | 'lang' | 'translationOf' | 'translate' | 'noindex' | 'lastModified'> & {
+    readonly [key: string]: string | boolean | undefined
+  }
   readonly templatePath: string
   readonly homepageTemplatePath?: string
   readonly markdownOptions?: MarkdownItOptions

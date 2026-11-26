@@ -2,7 +2,7 @@ import path from 'node:path'
 import chokidar from 'chokidar'
 import type { BuilderConfig } from './config.js'
 import { build } from './builder.js'
-import { clearTemplateCache } from './template.js'
+import { clearTemplateCache, getTemplateFiles } from './template.js'
 import { cleanHtmlFiles, logError } from './utils.js'
 
 export interface DevServerOptions {
@@ -63,6 +63,16 @@ export async function startDevServer(
     persistent: true,
   })
 
+  // Partials can live anywhere, so watch each template file a build reads.
+  // Only grows: a partial removed from an include still rebuilds harmlessly.
+  const templateFiles = new Set<string>()
+  const trackTemplateFiles = (): void => {
+    const added = getTemplateFiles().filter((file) => !templateFiles.has(file))
+    for (const file of added) templateFiles.add(file)
+    if (added.length > 0) watcher.add(added)
+  }
+  trackTemplateFiles()
+
   let isBuilding = false
   let shouldRebuild = false
 
@@ -70,7 +80,7 @@ export async function startDevServer(
     // Clear template cache if a template file changed
     if (filePath) {
       const resolvedPath = path.resolve(filePath)
-      if (resolvedPath === templatePath || resolvedPath === homepageTemplatePath) {
+      if (templateFiles.has(resolvedPath)) {
         clearTemplateCache()
       }
     }
@@ -92,6 +102,7 @@ export async function startDevServer(
         }
       })
       .finally(() => {
+        trackTemplateFiles()
         isBuilding = false
         if (shouldRebuild) {
           shouldRebuild = false
@@ -115,11 +126,8 @@ export async function startDevServer(
       }
     }
 
-    // Watch template files
-    if (templatePath && resolved === templatePath) {
-      return true
-    }
-    if (homepageTemplatePath && resolved === homepageTemplatePath) {
+    // Watch templates and the partials they include
+    if (templateFiles.has(resolved)) {
       return true
     }
 

@@ -1,8 +1,16 @@
-import { test, expect, beforeEach, afterEach } from 'bun:test'
-import { mkdir, writeFile, rm } from 'node:fs/promises'
+import { test, expect, beforeEach, afterEach, setSystemTime } from 'bun:test'
+import { mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import path from 'node:path'
-import { escapeHtml, toAbsoluteUrl, cleanUrl, renderTemplate } from './template.js'
-import type { PageMeta } from './config.js'
+import {
+  escapeHtml,
+  toAbsoluteUrl,
+  cleanUrl,
+  renderTemplate,
+  clearTemplateCache,
+  getTemplateFiles,
+  toPlaceholderName,
+} from './template.js'
+import type { PageMeta, iAlternateLink } from './config.js'
 
 test('escapeHtml - escapes special characters', () => {
   expect(escapeHtml('Hello & World')).toBe('Hello &amp; World')
@@ -30,6 +38,7 @@ test('cleanUrl - removes .html extension and normalizes index', () => {
 const TEST_TEMPLATE_DIR = path.join(process.cwd(), '.test-template')
 
 beforeEach(async () => {
+  clearTemplateCache()
   await rm(TEST_TEMPLATE_DIR, { recursive: true, force: true })
   await mkdir(TEST_TEMPLATE_DIR, { recursive: true })
 })
@@ -340,4 +349,245 @@ test('renderTemplate - a 404 page has no canonical', async () => {
   })
   expect(result).not.toContain('rel="canonical"')
   expect(result).toContain('<meta name="robots" content="noindex, nofollow" />')
+})
+
+// expected.html was rendered from template.html by the v3.1 template code.
+test('renderTemplate - a template without the v3.2 features renders byte-for-byte as in v3.1', async () => {
+  const fixtures = path.join(import.meta.dir, '../test/fixtures/legacy-template')
+  const meta: PageMeta = {
+    title: 'A <Title> & "more"',
+    description: "It's described",
+    sidebarTitle: 'Side',
+    sidebarSummary: 'Summary',
+    backLinkHref: '/back?a=1&b=2',
+    backLinkLabel: 'Back',
+    output: 'fr/page.html',
+    lang: 'fr',
+    ogImage: 'img/og.png',
+    lastModified: '2026-11-01',
+    eyebrow: 'Unused eyebrow',
+  }
+  const alternates: iAlternateLink[] = [
+    { lang: 'en', href: 'https://example.com/page' },
+    { lang: 'fr', href: 'https://example.com/fr/page' },
+    { lang: 'x-default', href: 'https://example.com/page' },
+  ]
+  setSystemTime(new Date('2026-06-01T12:00:00Z'))
+  try {
+    const result = await renderTemplate(
+      '<p>{{TITLE}} {{#EYEBROW}}x{{/EYEBROW}} {{> partials/head.html}} {{EYEBROW}}</p>',
+      meta,
+      path.join(fixtures, 'template.html'),
+      'https://example.com',
+      false,
+      undefined,
+      alternates,
+      undefined,
+      { jsonLd: { '@type': 'WebPage', name: '</script>' } },
+    )
+    expect(result).toBe(await readFile(path.join(fixtures, 'expected.html'), 'utf-8'))
+  } finally {
+    setSystemTime()
+  }
+})
+
+function featureMeta(overrides: Partial<PageMeta> = {}): PageMeta {
+  return {
+    title: 'Title',
+    description: 'Description',
+    sidebarTitle: 'Side',
+    sidebarSummary: 'Summary',
+    backLinkHref: '/',
+    backLinkLabel: 'Back',
+    output: 'page.html',
+    ogImage: 'og.png',
+    ...overrides,
+  }
+}
+
+async function renderFeature(
+  template: string,
+  meta: PageMeta = featureMeta(),
+  body = '<p>body</p>',
+  alternates?: iAlternateLink[],
+): Promise<string> {
+  const templatePath = path.join(TEST_TEMPLATE_DIR, 'feature.html')
+  await writeFile(templatePath, `<html><head></head><body>${template}</body></html>`)
+  const result = await renderTemplate(body, meta, templatePath, 'https://example.com', false, undefined, alternates)
+  return result.slice(result.indexOf('<body>') + 6, result.indexOf('</body>'))
+}
+
+test('toPlaceholderName - maps keys to upper snake case', () => {
+  expect(toPlaceholderName('eyebrow')).toBe('EYEBROW')
+  expect(toPlaceholderName('heroImage')).toBe('HERO_IMAGE')
+  expect(toPlaceholderName('ogImageWidth')).toBe('OG_IMAGE_WIDTH')
+  expect(toPlaceholderName('hero-image')).toBe('HERO_IMAGE')
+  expect(toPlaceholderName('2col')).toBeUndefined()
+})
+
+test('renderTemplate - front-matter keys fill escaped placeholders', async () => {
+  const result = await renderFeature(
+    '<p>{{EYEBROW}}</p><img src="{{HERO_IMAGE}}">',
+    featureMeta({ eyebrow: 'Rope & <knots>', heroImage: 'img/a"b.png' }),
+  )
+  expect(result).toBe('<p>Rope &amp; &lt;knots&gt;</p><img src="img/a&quot;b.png">')
+})
+
+test('renderTemplate - an unset front-matter placeholder renders empty', async () => {
+  expect(await renderFeature('[{{EYEBROW}}]')).toBe('[]')
+})
+
+test('renderTemplate - built-ins win over front-matter keys of the same name', async () => {
+  const result = await renderFeature(
+    '{{BODY}}|{{YEAR}}|{{LANG}}',
+    featureMeta({ body: 'not the body', year: '1999' }),
+  )
+  expect(result).toBe(`<p>body</p>|${new Date().getFullYear()}|en`)
+})
+
+test('renderTemplate - only all-caps double-brace tokens are placeholders', async () => {
+  const result = await renderFeature(
+    '{{eyebrow}} {{ EYEBROW }} {{Eyebrow}} {{1A}} {{_A}} {{EYEBROW}}',
+    featureMeta({ eyebrow: 'E' }),
+  )
+  expect(result).toBe('{{eyebrow}} {{ EYEBROW }} {{Eyebrow}} {{1A}} {{_A}} E')
+})
+
+test('renderTemplate - booleans fill placeholders as true or empty', async () => {
+  const result = await renderFeature('{{FEATURED}}|{{HIDDEN}}', featureMeta({ featured: true, hidden: false }))
+  expect(result).toBe('true|')
+})
+
+test('renderTemplate - nothing is expanded inside the body or inserted values', async () => {
+  const body = '<p>{{TITLE}} {{#EYEBROW}}x{{/EYEBROW}} {{/X}} {{> head.html}} $$ $& {{EYEBROW}}</p>'
+  const result = await renderFeature(
+    '{{BODY}}|{{DESCRIPTION}}',
+    featureMeta({ eyebrow: 'E', description: '{{TITLE}} $$' }),
+    body,
+  )
+  expect(result).toBe(`${body}|{{TITLE}} $$`)
+})
+
+test('renderTemplate - a section keeps its contents when the value is non-empty', async () => {
+  const template = '<p>{{#EYEBROW}}<span class="eyebrow">{{EYEBROW}}</span>{{/EYEBROW}}</p>'
+  expect(await renderFeature(template, featureMeta({ eyebrow: 'Hi' }))).toBe(
+    '<p><span class="eyebrow">Hi</span></p>',
+  )
+  expect(await renderFeature(template, featureMeta({ eyebrow: '' }))).toBe('<p></p>')
+  expect(await renderFeature(template)).toBe('<p></p>')
+})
+
+test('renderTemplate - {{#UPDATED}} drops the Updated line without a date', async () => {
+  const template = `<footer>
+  {{#UPDATED}}
+  <span>Updated <time datetime="{{UPDATED_ISO}}">{{UPDATED}}</time></span>
+  {{/UPDATED}}
+</footer>`
+  expect(await renderFeature(template, featureMeta({ lastModified: '2026-11-01' }))).toBe(`<footer>
+  
+  <span>Updated <time datetime="2026-11-01">November 1, 2026</time></span>
+  
+</footer>`)
+  expect(await renderFeature(template)).toBe('<footer>\n  \n</footer>')
+})
+
+test('renderTemplate - {{#LANGUAGE_SWITCHER}} renders only with translations', async () => {
+  const template = '{{#LANGUAGE_SWITCHER}}<div>{{LANGUAGE_SWITCHER}}</div>{{/LANGUAGE_SWITCHER}}'
+  const alternates = [
+    { lang: 'en', href: 'https://example.com/page' },
+    { lang: 'fr', href: 'https://example.com/fr/page' },
+  ]
+  expect(await renderFeature(template, featureMeta(), undefined, alternates)).toContain('<div><nav class="smb-lang-switch"')
+  expect(await renderFeature(template, featureMeta(), undefined, alternates.slice(0, 1))).toBe('')
+})
+
+test('renderTemplate - sections nest with differently named sections', async () => {
+  const template = '{{#A}}a{{#B}}b{{B}}{{/B}}{{#C}}c{{/C}}{{/A}}|{{#C}}{{#A}}x{{/A}}{{/C}}'
+  expect(await renderFeature(template, featureMeta({ a: '1', b: '2' }))).toBe('ab2|')
+  expect(await renderFeature(template, featureMeta({ b: '2', c: '3' }))).toBe('|')
+  expect(await renderFeature(template, featureMeta({ a: '1', c: '3' }))).toBe('ac|x')
+})
+
+test('renderTemplate - an unclosed section fails with the template and name', async () => {
+  await expect(renderFeature('{{#EYEBROW}}open')).rejects.toThrow(/feature\.html never closes section EYEBROW/)
+})
+
+test('renderTemplate - a mismatched section fails with the template and name', async () => {
+  await expect(renderFeature('{{#A}}{{#B}}{{/A}}{{/B}}')).rejects.toThrow(
+    /feature\.html closes section A while section B is open/,
+  )
+  clearTemplateCache()
+  await expect(renderFeature('{{/A}}')).rejects.toThrow(/feature\.html closes section A that was never opened/)
+})
+
+test('renderTemplate - includes resolve relative to the including file and nest', async () => {
+  await mkdir(path.join(TEST_TEMPLATE_DIR, 'partials', 'meta'), { recursive: true })
+  await writeFile(
+    path.join(TEST_TEMPLATE_DIR, 'partials', 'head.html'),
+    '<title>{{TITLE}}</title>{{>meta/icons.html}}',
+  )
+  await writeFile(
+    path.join(TEST_TEMPLATE_DIR, 'partials', 'meta', 'icons.html'),
+    '{{#EYEBROW}}<meta name="eyebrow" content="{{EYEBROW}}">{{/EYEBROW}}',
+  )
+  const templatePath = path.join(TEST_TEMPLATE_DIR, 'page.html')
+  await writeFile(templatePath, '<html><head>{{> partials/head.html}}</head><body>{{BODY}}</body></html>')
+
+  const result = await renderTemplate('<p>b</p>', featureMeta({ eyebrow: 'E' }), templatePath, 'https://example.com')
+  expect(result).toStartWith('<html><head><title>Title</title><meta name="eyebrow" content="E">')
+  expect(getTemplateFiles()).toEqual(
+    expect.arrayContaining([
+      templatePath,
+      path.join(TEST_TEMPLATE_DIR, 'partials', 'head.html'),
+      path.join(TEST_TEMPLATE_DIR, 'partials', 'meta', 'icons.html'),
+    ]),
+  )
+})
+
+test('renderTemplate - partials are cached until the cache is cleared', async () => {
+  const partial = path.join(TEST_TEMPLATE_DIR, 'part.html')
+  await writeFile(partial, 'one')
+  expect(await renderFeature('{{> part.html}}')).toBe('one')
+  await writeFile(partial, 'two')
+  const templatePath = path.join(TEST_TEMPLATE_DIR, 'feature.html')
+  const again = await renderTemplate('', featureMeta(), templatePath, 'https://example.com')
+  expect(again).toContain('<body>one</body>')
+  clearTemplateCache()
+  expect(await renderFeature('{{> part.html}}')).toBe('two')
+})
+
+test('renderTemplate - a missing include fails naming the chain', async () => {
+  await writeFile(path.join(TEST_TEMPLATE_DIR, 'outer.html'), '{{> missing.html}}')
+  await expect(renderFeature('{{> outer.html}}')).rejects.toThrow(
+    /Template include not found: .*feature\.html -> .*outer\.html -> .*missing\.html/,
+  )
+})
+
+test('renderTemplate - an include cycle fails naming the chain', async () => {
+  await writeFile(path.join(TEST_TEMPLATE_DIR, 'a.html'), '{{> b.html}}')
+  await writeFile(path.join(TEST_TEMPLATE_DIR, 'b.html'), '{{> a.html}}')
+  await expect(renderFeature('{{> a.html}}')).rejects.toThrow(
+    /Template include cycle: .*feature\.html -> .*a\.html -> .*b\.html -> .*a\.html/,
+  )
+})
+
+// Value: protects=several includes in one file land in source order, and a partial reached by two branches is not a cycle; fails_when=include results are spliced out of order or cycle detection uses a global visited set; why_new=existing include tests have one include per file and no diamond; seam=none; no_claim=performance of repeated partial reads
+test('renderTemplate - sibling includes keep their order and a shared partial is not a cycle', async () => {
+  await writeFile(path.join(TEST_TEMPLATE_DIR, 'shared.html'), '[s]')
+  await writeFile(path.join(TEST_TEMPLATE_DIR, 'left.html'), 'L{{> shared.html}}')
+  await writeFile(path.join(TEST_TEMPLATE_DIR, 'right.html'), 'R{{> shared.html}}')
+  expect(await renderFeature('{{> left.html}}|{{> right.html}}|{{> left.html}}')).toBe('L[s]|R[s]|L[s]')
+})
+
+// Value: protects=a missing partial stays in getTemplateFiles so the dev server rebuilds once it is created; fails_when=files are recorded only after a successful read, or clearTemplateCache stops resetting them; why_new=getTemplateFiles is only checked after a successful render; seam=none; no_claim=chokidar actually firing on the new file
+test('getTemplateFiles - records a missing partial and resets on clearTemplateCache', async () => {
+  const missing = path.join(TEST_TEMPLATE_DIR, 'later.html')
+  await expect(renderFeature('{{> later.html}}')).rejects.toThrow(/Template include not found/)
+  expect(getTemplateFiles()).toEqual(
+    expect.arrayContaining([path.join(TEST_TEMPLATE_DIR, 'feature.html'), missing]),
+  )
+  clearTemplateCache()
+  expect(getTemplateFiles()).toEqual([])
+  await writeFile(missing, 'now here')
+  expect(await renderFeature('{{> later.html}}')).toBe('now here')
 })

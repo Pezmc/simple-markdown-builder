@@ -8,7 +8,14 @@ import type {
 import { getDefaultLang, getSupportedLangs } from './config.js'
 import { extractFrontMatter, sanitizeLang, sanitizeSlug, inferLangFromPath } from './frontmatter.js'
 import { createMarkdownRenderer } from './markdown.js'
-import { renderTemplate, clearTemplateCache } from './template.js'
+import {
+  BUILT_IN_PLACEHOLDERS,
+  clearTemplateCache,
+  loadTemplate,
+  renderTemplate,
+  templatePlaceholderNames,
+  toPlaceholderName,
+} from './template.js'
 import { appendUtmParams, obfuscateMailtoLinks, collectMarkdownFiles, extractSlugFromPath, normalizePathSeparators, cleanHtmlFiles, logWarning } from './utils.js'
 import { ensureTranslations } from './translations.js'
 import { writeSitemap, groupByTranslation, buildAlternateLinks, resolveCanonicalRelative } from './sitemap.js'
@@ -67,6 +74,9 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
   // Validated before any page is written, so a bad redirect fails fast.
   const redirectStubs = planRedirectStubs(config, plans, outputDir, defaultLang, supportedLangs)
 
+  // Before any page is written, so include and section errors fail fast.
+  await warnUnsetPlaceholders(config, plans, supportedLangs)
+
   const groups = groupByTranslation(plans)
   // 404 pages stand in for every missing URL, so they are nobody's translation.
   const hreflangGroups = groupByTranslation(
@@ -76,9 +86,7 @@ export async function build(config: BuilderConfig): Promise<RenderPlan[]> {
   await Promise.all(
     plans.map(async (plan) => {
       await mkdir(path.dirname(plan.outputPath), { recursive: true })
-      const isHomepage =
-        plan.relativeOutput === 'index.html' ||
-        supportedLangs.some((lang) => plan.relativeOutput === `${lang}/index.html`)
+      const isHomepage = isHomepageOutput(plan.relativeOutput, supportedLangs)
       const notFound = isNotFoundOutput(plan.relativeOutput, supportedLangs)
       const alternates = notFound
         ? undefined
@@ -147,6 +155,43 @@ function assertUniqueOutputs(plans: readonly RenderPlan[]): void {
       )
     }
     sources.set(plan.outputPath, plan.sourcePath)
+  }
+}
+
+function isHomepageOutput(relativeOutput: string, supportedLangs: readonly string[]): boolean {
+  return (
+    relativeOutput === 'index.html' ||
+    supportedLangs.some((lang) => relativeOutput === `${lang}/index.html`)
+  )
+}
+
+// A placeholder no page and no defaultMeta sets is probably a typo.
+async function warnUnsetPlaceholders(
+  config: BuilderConfig,
+  plans: readonly RenderPlan[],
+  supportedLangs: readonly string[],
+): Promise<void> {
+  // Like rendering, the homepage template is only read when a homepage uses it.
+  const rendersHomepage = plans.some((plan) => isHomepageOutput(plan.relativeOutput, supportedLangs))
+  const templatePaths = [
+    config.templatePath,
+    ...(rendersHomepage && config.homepageTemplatePath ? [config.homepageTemplatePath] : []),
+  ]
+  const used = new Set<string>()
+  for (const templatePath of templatePaths) {
+    for (const name of templatePlaceholderNames(await loadTemplate(templatePath))) used.add(name)
+  }
+  const set = new Set(
+    plans.flatMap((plan) =>
+      Object.entries(plan.meta)
+        .filter(([, value]) => value !== undefined)
+        .map(([key]) => toPlaceholderName(key)),
+    ),
+  )
+  for (const name of used) {
+    if (!BUILT_IN_PLACEHOLDERS.has(name) && !set.has(name)) {
+      logWarning(`Template placeholder {{${name}}} is not set by any page or defaultMeta; it renders empty.`)
+    }
   }
 }
 
