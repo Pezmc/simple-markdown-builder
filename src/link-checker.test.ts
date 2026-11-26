@@ -411,3 +411,18 @@ test('checkLinks - translationSiblings accepts single-quoted and upper-case anch
     translationGroups: new Map([['about', translatedPair()]]),
   })
 })
+
+test('checkLinks - decodes percent-encoded asset URLs before resolving them', async () => {
+  await mkdir(path.join(TEST_DIR, 'img'), { recursive: true })
+  await writeFile(path.join(TEST_DIR, 'img', 'my photo.png'), '')
+  await writeFile(path.join(TEST_DIR, 'img', 'café.png'), '')
+  await writeFile(
+    path.join(TEST_DIR, 'index.html'),
+    '<img src="/img/my%20photo.png" alt=""><img src="img/caf%C3%A9.png?v=2" alt=""><img src="/img/100%.png" alt="">',
+  )
+  const message = await expectFailure(checkLinks(TEST_DIR))
+  expect(message).not.toContain('my%20photo.png')
+  expect(message).not.toContain('caf%C3%A9.png')
+  // A malformed escape is checked as written, not thrown on.
+  expect(message).toContain('- /img/100%.png from ')
+})

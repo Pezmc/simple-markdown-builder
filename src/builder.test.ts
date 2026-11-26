@@ -908,3 +908,36 @@ test('build - translationFallback decides per page when default-language pages s
   expect(await readFile(path.join(docs, 'fr', 'index.html'), 'utf-8')).toContain('Accueil')
   expect(await readFile(path.join(docs, 'fr', 'guides', 'index.html'), 'utf-8')).toContain('url=/guides/')
 })
+
+test('build - a redirect from with repeated slashes or other case still collides with the page', async () => {
+  for (const from of ['/guides//', '/guides///index', '/About']) {
+    await rm(path.join(TEST_DIR, 'content'), { recursive: true, force: true })
+    const config = await redirectSite(
+      { 'about.md': '# About', 'guides/index.md': '# Guides' },
+      { redirects: [{ from, to: '/about' }] },
+    )
+    await expect(build(config)).rejects.toThrow('collides with the page')
+  }
+})
+
+test('build - two redirects differing only in case are declared twice', async () => {
+  const config = await redirectSite(
+    { 'about.md': '# About' },
+    { redirects: [{ from: '/Old', to: '/about' }, { from: '/old', to: '/about' }] },
+  )
+  await expect(build(config)).rejects.toThrow('is declared twice')
+})
+
+test('build - rejects a redirect from that is a URL, has a query or has another extension', async () => {
+  const cases: [string, string][] = [
+    ['https://example.com/old', 'without a query or fragment'],
+    ['/old?x=1', 'without a query or fragment'],
+    ['/old#top', 'without a query or fragment'],
+    ['/old.htm', 'must end in .html or have no extension'],
+    ['/old.php', 'must end in .html or have no extension'],
+  ]
+  for (const [from, error] of cases) {
+    const config = await redirectSite({ 'about.md': '# About' }, { redirects: [{ from, to: '/about' }] })
+    await expect(build(config)).rejects.toThrow(error)
+  }
+})

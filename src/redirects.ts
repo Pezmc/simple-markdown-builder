@@ -18,17 +18,24 @@ function sitePath(relativeOutput: string): string {
 }
 
 // "/old", "old.html" and "/guides/" become "old.html", "old.html" and
-// "guides/index.html".
+// "guides/index.html". Repeated slashes collapse, as path.join would collapse
+// them when the stub is written.
 function normalizeFrom(from: string): string {
   if (ABSOLUTE_URL.test(from) || from.startsWith('//') || /[?#]/.test(from)) {
     throw new Error(`Redirect from "${from}" must be a site path without a query or fragment`)
   }
-  const trimmed = from.replace(/^\/+/, '')
+  const trimmed = from.replace(/\/+/g, '/').replace(/^\//, '')
   if (trimmed.split('/').some((segment) => segment === '..' || segment === '.')) {
     throw new Error(`Redirect from "${from}" must not contain . or .. segments`)
   }
   const withIndex = trimmed === '' || trimmed.endsWith('/') ? `${trimmed}index` : trimmed
-  return `${stripHtmlExtension(withIndex)}.html`
+  // Only .html stubs are served for their extensionless URL; "/old.htm" would
+  // be written to old.html and still 404.
+  const extension = path.posix.extname(withIndex)
+  if (extension && extension.toLowerCase() !== '.html') {
+    throw new Error(`Redirect from "${from}" must end in .html or have no extension`)
+  }
+  return `${withIndex.slice(0, withIndex.length - extension.length)}.html`
 }
 
 // The built page an internal `to` lands on, tried the way a static host
@@ -49,23 +56,27 @@ export function planRedirectStubs(
   supportedLangs: readonly string[],
 ): RedirectStub[] {
   const pages = new Map(plans.map((plan) => [plan.relativeOutput, plan]))
+  // Collisions compare case-insensitively: on macOS and Windows "About.html"
+  // and "about.html" are one file, and the stub would replace the page.
+  const pagesByFoldedPath = new Map(plans.map((plan) => [plan.relativeOutput.toLowerCase(), plan]))
   const stubs = new Map<string, RedirectStub>()
 
   const add = (relativeOutput: string, to: string, canonical: string, lang: string, reason: RedirectInfo['reason']): void => {
     const from = sitePath(relativeOutput)
-    const page = pages.get(relativeOutput)
+    const key = relativeOutput.toLowerCase()
+    const page = pagesByFoldedPath.get(key)
     if (page) {
       throw new Error(
-        `Redirect from ${from} collides with the page ${relativeOutput} built from ${path.relative(process.cwd(), page.sourcePath)}`,
+        `Redirect from ${from} collides with the page ${page.relativeOutput} built from ${path.relative(process.cwd(), page.sourcePath)}`,
       )
     }
-    const existing = stubs.get(relativeOutput)
+    const existing = stubs.get(key)
     if (existing) {
       throw new Error(
         `Redirect from ${from} is declared twice (to ${existing.info.to} and to ${to})`,
       )
     }
-    stubs.set(relativeOutput, {
+    stubs.set(key, {
       outputPath: path.join(outputDir, ...relativeOutput.split('/')),
       canonical,
       info: { from, to, lang, reason },

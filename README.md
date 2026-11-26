@@ -179,10 +179,10 @@ Each stub is written to `<from>.html` (`/guides/` writes `guides/index.html`) an
 
 The build fails, before any page is written, when:
 
-- a `from` is the output of a real page,
+- a `from` is the output of a real page (compared case-insensitively, since `About.html` and `about.html` are one file on macOS and Windows; repeated slashes collapse),
 - two redirects (explicit or fallback) write the same path,
 - an internal `to` is not a page built from `content/` (a static file such as `/files/guide.pdf`, or another redirect stub, does not count),
-- a `from` is an absolute URL, has a query or fragment, or contains `.` or `..` segments.
+- a `from` is an absolute URL, has a query or fragment, contains `.` or `..` segments, or ends in an extension other than `.html` (a stub for `/old.htm` would be written to `old.html` and `/old.htm` would still 404).
 
 Stubs are written after the pages and before `onPagesWritten`, and are link-checked like any page. They are not in `plans`, so they stay out of `sitemap.xml`, hreflang alternates, the language switcher and the hook context. A link to a stub is valid; its `#fragment` is not checked, since a meta refresh drops it. The dev server serves stubs like any other page.
 

@@ -229,11 +229,20 @@ export async function checkLinks(
         if (ABSOLUTE_URL.test(url) || url.startsWith('//')) {
           continue
         }
-        const resolvedPath = resolveInternalPath(url, file, resolvedOutputDir)
+        // Markdown percent-encodes image URLs ("my photo.png" renders as
+        // my%20photo.png); the file on disk has the decoded name.
+        const pathPart = url.split(/[?#]/)[0] ?? ''
+        let decoded = pathPart
+        try {
+          decoded = decodeURI(pathPart)
+        } catch {
+          // A malformed escape is checked as written.
+        }
+        const resolvedPath = resolveInternalPath(decoded, file, resolvedOutputDir)
         // A bare relative src on a nested page (guides/x.html -> diagram.png)
         // is relative to the page in a browser, unlike resolveInternalPath's
         // site-root reading, so either location counts.
-        const pageRelative = path.resolve(path.dirname(file), url.split(/[?#]/)[0] ?? '')
+        const pageRelative = path.resolve(path.dirname(file), decoded)
         const found =
           (await findTargetFile(resolvedPath)).found ||
           (!url.startsWith('/') && (await findTargetFile(pageRelative)).found)
